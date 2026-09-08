@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/research/2026-09-08-kishi-v2-plugins.md
+2026-09-08-kishi-v2-plugins.md: 706b4a6e588fba18c219fef6f9ae6e9187061741
+2026-09-08-kishi-v2-plugins.zh.md: e4f1a4f36bb4799788df5bf28bf684803493d22e
