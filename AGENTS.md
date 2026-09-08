@@ -2,6 +2,20 @@
 
 DeepSeek Harness is an all-plugin Cordis agent harness. Read [docs/architecture.md](docs/architecture.md) before changing `packages/`; follow [docs/AGENTS.md](docs/AGENTS.md) for documentation.
 
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues via `gh`; follow [issue-tracker.md](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Default five-role mapping: [triage-labels.md](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Single-context; follow [domain.md](docs/agents/domain.md).
+
 ## Pre-stable APIs and released Session data
 
 Public APIs are pre-stable; update every consumer. Released Session JSONL follows [adjacent migration](.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md): body reads may add a version-named successor but never move, overwrite, or delete committed generations; predecessors imply neither fallback nor downgrade support. SQLite domains use monotonic `SCHEMA_VERSION`.
