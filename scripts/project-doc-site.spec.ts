@@ -11,13 +11,15 @@ import type { Nodes } from 'mdast'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { cleanDocSiteOutput, docSiteBuildOptions } from '../website/build.ts'
 import { docsPages, landingLink, routeLink, sectionSpec, type DocsPage } from '../website/docs.ts'
+import { englishOnlyDocs, isMaintainedDoc } from './doc-policy.ts'
 import {
   addProjectionFrontmatter, emitRawMarkdownPages, llmsTxt, projectedPageContent, publishableImage,
-  rawMarkdownFiles, rawMarkdownPageContent, rawMarkdownRoute, resolveRepositoryRef, rewriteMarkdown,
+  publishedDocsPages, rawMarkdownFiles, rawMarkdownPageContent, rawMarkdownRoute, resolveRepositoryRef, rewriteMarkdown,
 } from './project-doc-site.ts'
 
 const roots: string[] = []
 const repositoryRoot = resolve(import.meta.dirname, '..')
+const englishOnly = englishOnlyDocs(repositoryRoot)
 
 function unexpectedWebsiteMarkdown(files: readonly string[]): string[] {
   return files.filter(file => file.endsWith('.md') && file !== 'website/AGENTS.md').sort()
@@ -352,8 +354,18 @@ describe('rewriteMarkdown', () => {
 })
 
 describe('docsPages locale routes', () => {
+  it('retains the bilingual manifest and selects only English sources for the fork', () => {
+    expect(publishedDocsPages(false)).toEqual(docsPages)
+    const pages = publishedDocsPages(true)
+    expect(pages.filter(page => page.locale === 'en')).toEqual(docsPages.filter(page => page.locale === 'en'))
+    expect(pages.every(page => page.contentLocale === 'en-US' && !page.source.endsWith('.zh.md'))).toBe(true)
+    const home = pages.find(page => page.route === 'index.md')
+    expect(home).toMatchObject({ source: 'docs/user/index.md', locale: 'root', sidebar: null })
+    expect(projectedPageContent('', home!, true)).toContain('content: 0; url=./en/')
+  })
+
   it('redirects both locale roots to their locale-relative quick-start page', () => {
-    const homes = docsPages.filter(page => page.sidebar === null)
+    const homes = publishedDocsPages().filter(page => page.sidebar === null)
     expect(homes.map(page => page.route).sort()).toEqual(['en/index.md', 'index.md'])
     for (const page of homes) {
       const source = readFileSync(resolve(repositoryRoot, page.source), 'utf8')
@@ -401,7 +413,7 @@ describe('docsPages locale routes', () => {
     ] as const
 
     for (const [englishSource, englishTarget] of entries) {
-      for (const locale of ['en', 'root'] as const) {
+      for (const locale of (['en', 'root'] as const).filter(locale => !englishOnly || locale === 'en')) {
         const source = locale === 'root' ? englishSource.replace(/\.md$/, '.zh.md') : englishSource
         const target = locale === 'root' ? englishTarget.replace(/\.md$/, '.zh.md') : englishTarget
         const page = docsPages.find(candidate => candidate.locale === locale && candidate.source === source)
@@ -425,7 +437,7 @@ describe('docsPages locale routes', () => {
       .filter(page => !page.endsWith('.zh.md') && page !== 'README.md')
       .sort()
     expect(pages.length).toBeGreaterThan(0)
-    for (const readme of ['README.md', 'README.zh.md']) {
+    for (const readme of ['README.md', 'README.zh.md'].filter(file => isMaintainedDoc(file, englishOnly))) {
       const rows = readFileSync(join(repositoryRoot, 'docs/subsystems', readme), 'utf8')
       const missing = pages.filter((page) => {
         const target = readme.endsWith('.zh.md') ? page.replace(/\.md$/, '.zh.md') : page
@@ -435,7 +447,7 @@ describe('docsPages locale routes', () => {
     }
   })
 
-  it('places the shared todo fragment alias on the translated todo section', () => {
+  it.skipIf(englishOnly)('places the shared todo fragment alias on the translated todo section', () => {
     const catalog = readFileSync(resolve(repositoryRoot, 'docs/tool-catalog.zh.md'), 'utf8')
     expect(catalog.match(/<a id="deepseek-aidsh-tool-todo"><\/a>/g)).toHaveLength(1)
     expect(catalog).toContain(
@@ -730,8 +742,8 @@ describe('emitRawMarkdownPages', () => {
 describe('rawMarkdownFiles', () => {
   it('lists every route plus a parent alias per index route', () => {
     const files = rawMarkdownFiles()
-    for (const page of docsPages) expect(files).toContain(page.route)
-    expect(files).toContain('reference.md')
+    for (const page of publishedDocsPages()) expect(files).toContain(page.route)
+    expect(files.includes('reference.md')).toBe(!englishOnly)
     expect(files).toContain('en/reference.md')
     expect(files).toContain('en.md')
     // The root home has no parent to alias into; `/` is documented as `/index.md`.
@@ -747,7 +759,7 @@ describe('raw Markdown projection of the published manifest', () => {
   // emission and the 181-file link walk past vitest's 5s default.
   beforeAll(() => {
     mirror = mkdtempSync(join(tmpdir(), 'dsh-doc-mirror-real-'))
-    emitRawMarkdownPages(mirror, { pages: docsPages, repoRoot: repositoryRoot, repositoryRef: 'master' })
+    emitRawMarkdownPages(mirror, { pages: publishedDocsPages(), repoRoot: repositoryRoot, repositoryRef: 'master' })
   }, 60_000)
 
   afterAll(() => {
@@ -805,16 +817,25 @@ describe('llmsTxt', () => {
 
   it('lists every sidebar page as a base-prefixed raw-Markdown link', () => {
     const text = llmsTxt(site)
-    for (const page of docsPages) {
+    for (const page of publishedDocsPages()) {
       if (page.sidebar === null) expect(text, page.route).not.toContain(`](/x/${page.route})`)
       else expect(text, page.route).toContain(`- [${page.label}](/x/${page.route}): ${page.section}`)
     }
   })
 
   it('groups the two locale trees under their own headings', () => {
-    const text = llmsTxt(site)
+    const text = llmsTxt(site, false)
     expect(text.indexOf('## 简体中文')).toBeGreaterThan(-1)
     expect(text.indexOf('## English')).toBeGreaterThan(text.indexOf('## 简体中文'))
+  })
+
+  it('omits Chinese pages and instructions in English-only mode', () => {
+    const text = llmsTxt({ ...site, description: 'Agent harness' }, true)
+    expect(text).toContain('## English')
+    expect(text).not.toContain('## 简体中文')
+    expect(text).not.toContain('页面 URL')
+    expect(text).not.toContain('](/x/reference/')
+    expect(text).toContain('](/x/en/reference/')
   })
 
   it('carries the site identity and the raw-Markdown convention', () => {

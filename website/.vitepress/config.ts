@@ -7,7 +7,9 @@ import type { ViteDevServer } from 'vite'
 import { withMermaid } from 'vitepress-plugin-mermaid'
 import { landingLink, localeCollections, orderedPages, routeLink, sectionSpec, type DocsLocale, type DocsPage, type DocsSidebar } from '../docs.ts'
 import { docsSourceFiles, emitRawMarkdownPages, llmsTxt, projectDocs, rawMarkdownRoute } from '../../scripts/project-doc-site.ts'
+import { englishOnlyDocs } from '../../scripts/doc-policy.ts'
 
+const englishOnly = englishOnlyDocs(resolve(import.meta.dirname, '../..'))
 projectDocs()
 
 function sidebar(locale: DocsLocale, collection: NonNullable<DocsPage['sidebar']>): DefaultTheme.SidebarItem[] {
@@ -206,7 +208,7 @@ const base = process.env.DOCS_BASE ?? '/'
 /** Site identity shared by the VitePress configuration and the llms.txt index. */
 const siteIdentity = {
   title: 'DeepSeek Harness',
-  description: '用于构建 Agent Harness 的插件化 SDK',
+  description: englishOnly ? 'An all-plugin Cordis agent harness' : '用于构建 Agent Harness 的插件化 SDK',
 }
 
 /**
@@ -292,7 +294,7 @@ function siteTitle(previewTag: string): string {
   return `<span class="dsh-lockup">${wordmark}<span class="dsh-tag">${previewTag}</span></span>`
 }
 
-export default withMermaid({
+const config = withMermaid({
   title: siteIdentity.title,
   description: siteIdentity.description,
   base,
@@ -410,5 +412,14 @@ export default withMermaid({
     },
   },
   mermaid: {},
-  themeConfig: sharedTheme,
+  themeConfig: { ...sharedTheme, search: englishOnly ? { provider: 'local' } : sharedTheme.search },
 })
+
+if (englishOnly) {
+  const english = config.locales?.en
+  if (english === undefined) throw new Error('English documentation locale is missing')
+  config.locales = { root: english }
+  config.lang = 'en-US'
+}
+
+export default config

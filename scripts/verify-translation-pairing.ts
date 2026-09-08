@@ -1,6 +1,7 @@
 /**
- * Enforce complete English/Chinese pairs, matching structure, and recorded git
- * blob hashes for every in-scope document. The manifest contains only explicit
+ * In bilingual mode, enforce complete English/Chinese pairs, matching structure,
+ * and recorded git blob hashes. English-only mode skips checks and refuses writes.
+ * The manifest contains only explicit
  * exclusions, which may have neither a counterpart nor a sidecar.
  * `--list` reports state; `--write <pairs...>` records the named confirmed
  * pairs (`--write --all` records every complete pair); `--cached <pairs...>`
@@ -12,6 +13,7 @@
 
 import { existsSync, globSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve, sep } from 'node:path'
+import { englishOnlyDocs, parseDocPolicy } from './doc-policy.ts'
 import {
   gitBlobHash,
   gitIndexPaths,
@@ -55,6 +57,19 @@ const listMode = request.mode === 'list'
 const writeMode = request.mode === 'write'
 const indexMode = request.input === 'index'
 const indexFiles = indexMode ? gitIndexPaths(root) : undefined
+const englishOnly = indexMode
+  ? parseDocPolicy(indexFiles?.has('scripts/doc-policy.json')
+    ? readGitIndexBlob(root, 'scripts/doc-policy.json')?.content.toString('utf8')
+    : undefined)
+  : englishOnlyDocs(root)
+if (englishOnly) {
+  if (writeMode) {
+    console.error('verify-translation-pairing: English-only documentation does not update upstream pairing records')
+    process.exit(1)
+  }
+  console.log('verify-translation-pairing: skipped by English-only documentation policy')
+  process.exit(0)
+}
 
 const contentCache = new Map<string, Buffer | undefined>()
 

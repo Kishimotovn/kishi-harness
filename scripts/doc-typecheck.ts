@@ -10,6 +10,7 @@ import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { builtDeclarationPath } from './doc-typecheck-paths.ts'
+import { englishOnlyDocs, isMaintainedDoc } from './doc-policy.ts'
 import { markdownFences } from './markdown.ts'
 import { partitionPairedMarkdownDerivatives } from './paired-markdown-derivatives.ts'
 import { isArchivedAgentNotePath } from './repo-files.ts'
@@ -205,9 +206,10 @@ function remapBlockPaths(output: string, blocks: Block[]): string {
 const markdownGlobs = ['README.md', '.agents/notes/**/*.md', 'docs/**/*.md', 'packages/*/*.md', 'packages/*/*/*.md']
 
 const files: string[] = []
+const englishOnly = englishOnlyDocs(root)
 for (const pattern of markdownGlobs) {
   for (const match of globSync(pattern, { cwd: root })) {
-    if (!isArchivedAgentNotePath(match)) files.push(resolve(root, match))
+    if (isMaintainedDoc(match, englishOnly) && !isArchivedAgentNotePath(match)) files.push(resolve(root, match))
   }
 }
 files.sort()

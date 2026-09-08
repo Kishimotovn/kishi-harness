@@ -2,6 +2,7 @@
 
 import { globSync, readFileSync, realpathSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
+import { englishOnlyDocs, isMaintainedDoc } from './doc-policy.ts'
 
 /** One authored path plus its canonical target for symlink deduplication. */
 export interface RepoFile {
@@ -27,7 +28,7 @@ export function isArchivedAgentNotePath(path: string): boolean {
 }
 
 /**
- * Expand repository-relative globs and deduplicate symlinked files.
+ * Expand repository-relative globs, select maintained documentation, and deduplicate symlinked files.
  * @param root - absolute repository root.
  * @param patterns - repository-relative glob patterns, processed in order.
  * @param isExcluded - optional predicate over each matched relative path.
@@ -40,10 +41,11 @@ export function uniqueRepoFiles(
 ): RepoFile[] {
   const seen = new Set<string>()
   const files: RepoFile[] = []
+  const englishOnly = englishOnlyDocs(root)
   for (const pattern of patterns) {
     for (const match of globSync(pattern, { cwd: root })) {
       const repoPath = match.split(sep).join('/')
-      if (isExcluded(repoPath)) continue
+      if (!isMaintainedDoc(repoPath, englishOnly) || isExcluded(repoPath)) continue
       const abs = resolve(root, repoPath)
       const real = realpathSync(abs)
       if (seen.has(real)) continue

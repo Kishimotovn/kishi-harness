@@ -68,6 +68,16 @@ describe('maybeRecordPair', () => {
       .toBe(renderPairMeta(PAGE, blobHash(Buffer.from(currentEn)), ZH, blobHash(Buffer.from(currentZh))))
   })
 
+  it('preserves the upstream record in English-only mode', () => {
+    const { root, before } = setup({ beforeEn, beforeZh, currentEn, currentZh })
+    mkdirSync(join(root, 'scripts'))
+    writeFileSync(join(root, 'scripts/doc-policy.json'), JSON.stringify({ englishOnly: true }))
+    const record = readFileSync(join(root, META), 'utf8')
+    expect(maybeRecordPair(PAGE, before, root)).toBe(false)
+    expect(readFileSync(join(root, META), 'utf8')).toBe(record)
+    expect(readFileSync(join(root, ZH), 'utf8')).toBe(currentZh)
+  })
+
   it('refuses when the pair was already out of sync before the run', () => {
     const stale = renderPairMeta(PAGE, blobHash(Buffer.from('drifted long ago\n')), ZH, blobHash(Buffer.from(beforeZh)))
     const { root, before } = setup({ beforeEn, beforeZh, currentEn, currentZh, meta: stale })

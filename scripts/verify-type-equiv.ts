@@ -9,6 +9,7 @@
  */
 
 import { globSync, readFileSync, existsSync } from 'node:fs'
+import { englishOnlyDocs, isMaintainedDoc } from './doc-policy.ts'
 import { resolve, sep } from 'node:path'
 import ts from 'typescript'
 import { markdownFences } from './markdown.ts'
@@ -266,7 +267,8 @@ function sourcePublicApi(sourceRel: string, symbol: string): string | null {
 
 const manifestRaw = readFileSync(resolve(root, 'scripts/type-equiv.manifest.json'), 'utf8')
 const manifest = JSON.parse(manifestRaw) as { entries: ManifestEntry[] }
-const entries = manifest.entries
+const englishOnly = englishOnlyDocs(root)
+const entries = manifest.entries.filter(entry => isMaintainedDoc(entry.doc, englishOnly))
 
 // Key a block/entry by doc + symbol + projection. A symbol may be documented in
 // more than one doc, and a doc may carry both complete and projected forms.
@@ -280,7 +282,7 @@ const docSet = new Set<string>()
 for (const pattern of MARKDOWN_GLOBS) {
   for (const match of globSync(pattern, { cwd: root })) {
     const normalized = match.split(sep).join('/')
-    if (!isArchivedAgentNotePath(normalized)) docSet.add(normalized)
+    if (isMaintainedDoc(normalized, englishOnly) && !isArchivedAgentNotePath(normalized)) docSet.add(normalized)
   }
 }
 const extractedBlocks: EquivBlock[] = [...docSet].sort().flatMap(extractEquivBlocks)

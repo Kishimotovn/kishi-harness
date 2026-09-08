@@ -17,6 +17,7 @@ import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
 import type { Nodes } from 'mdast'
 import { docsPages, localeCollections, orderedPages, type DocsLocale, type DocsPage } from '../website/docs.ts'
+import { englishOnlyDocs } from './doc-policy.ts'
 import {
   isExternalOrAbsoluteMarkdownUrl,
   markdownDestination,
@@ -26,6 +27,19 @@ import {
 const REPOSITORY_URL = 'https://github.com/deepseek-ai/deepseek-harness'
 const root = resolve(import.meta.dirname, '..')
 const generatedRoot = resolve(root, 'website/.generated')
+
+/**
+ * Select published locales while retaining upstream's bilingual manifest.
+ * @param englishOnly - whether to publish English pages and an English root alias only.
+ * @returns pages whose sources, images, and raw Markdown may be published.
+ */
+export function publishedDocsPages(englishOnly: boolean = englishOnlyDocs(root)): DocsPage[] {
+  if (!englishOnly) return docsPages
+  const pages = docsPages.filter(page => page.locale === 'en')
+  const home = pages.find(page => page.route === 'en/index.md')
+  if (home === undefined) throw new Error('project-doc-site: English home page is missing from the publication manifest')
+  return [...pages, { ...home, locale: 'root', route: 'index.md' }]
+}
 
 /**
  * Resolve the public repository ref used by projected source links.
@@ -253,10 +267,14 @@ function withoutRepositoryChrome(markdown: string): string {
  *
  * @param markdown Rewritten canonical Markdown content.
  * @param page Publication manifest entry for the content.
+ * @param englishOnly Whether the root home redirects to the English route tree.
  * @returns Full Markdown for ordinary pages or frontmatter-only Markdown for a locale home page.
  */
-export function projectedPageContent(markdown: string, page: DocsPage): string {
+export function projectedPageContent(markdown: string, page: DocsPage, englishOnly = false): string {
   if (page.sidebar !== null) return withoutRepositoryChrome(markdown)
+  if (englishOnly && page.locale === 'root') {
+    return '---\nlayout: false\nhead:\n  - - meta\n    - http-equiv: refresh\n      content: 0; url=./en/\n---\n'
+  }
   if (!markdown.startsWith('---\n')) {
     throw new Error(`project-doc-site: locale home source ${JSON.stringify(page.source)} must start with YAML frontmatter.`)
   }
@@ -290,14 +308,15 @@ export function publishableImage(absPath: string, repoRoot: string): string | un
 /** Every local image a published page references, resolved to its repository file. */
 function referencedImages(): string[] {
   const found = new Set<string>()
-  for (const page of docsPages) {
+  const pages = publishedDocsPages()
+  for (const page of pages) {
     const sourceAbs = resolve(root, page.source)
     if (!existsSync(sourceAbs)) continue
     rewriteMarkdown(readFileSync(sourceAbs, 'utf8'), {
       sourcePath: page.source,
       locale: page.locale,
       route: page.route,
-      pages: docsPages,
+      pages,
       repoRoot: root,
       repositoryRef: 'master',
       placeImage: (absPath) => {
@@ -317,7 +336,7 @@ function referencedImages(): string[] {
  * touches the Markdown beside it.
  */
 export function docsSourceFiles(): string[] {
-  return [...new Set([...docsPages.map(page => resolve(root, page.source)), ...referencedImages()])]
+  return [...new Set([...publishedDocsPages().map(page => resolve(root, page.source)), ...referencedImages()])]
 }
 
 /** Manifest and repository inputs for one projection pass. */
@@ -331,7 +350,7 @@ export interface ProjectionContext {
 }
 
 function defaultProjectionContext(): ProjectionContext {
-  return { pages: docsPages, repoRoot: root, repositoryRef: resolveRepositoryRef(process.env) }
+  return { pages: publishedDocsPages(), repoRoot: root, repositoryRef: resolveRepositoryRef(process.env) }
 }
 
 /**
@@ -419,8 +438,9 @@ function projectPagesInto(
 /** Rebuild the disposable VitePress source tree from the publication manifest. */
 export function projectDocs(): void {
   rmSync(generatedRoot, { recursive: true, force: true })
+  const englishOnly = englishOnlyDocs(root)
   projectPagesInto(generatedRoot, defaultProjectionContext(), (markdown, page) =>
-    addProjectionFrontmatter(projectedPageContent(markdown, page), page))
+    addProjectionFrontmatter(projectedPageContent(markdown, page, englishOnly), page))
 }
 
 /**
@@ -474,7 +494,7 @@ function indexAliasRoute(route: string): string | undefined {
  * @param pages Pages to project, defaulting to the publication manifest.
  * @returns The emitted paths, routes first.
  */
-export function rawMarkdownFiles(pages: DocsPage[] = docsPages): string[] {
+export function rawMarkdownFiles(pages: DocsPage[] = publishedDocsPages()): string[] {
   const aliases = pages.map(page => indexAliasRoute(page.route)).filter(alias => alias !== undefined)
   return [...pages.map(page => page.route), ...aliases]
 }
@@ -553,17 +573,20 @@ const llmsTxtLocales: readonly { heading: string; locale: DocsLocale }[] = [
  * agent-facing entry point itself.
  *
  * @param site Site identity and base path.
- * @returns llms.txt content listing both locale trees.
+ * @param englishOnly Whether to list only the English route tree.
+ * @returns llms.txt content listing the maintained locale trees.
  */
-export function llmsTxt(site: LlmsTxtSite): string {
+export function llmsTxt(site: LlmsTxtSite, englishOnly: boolean = englishOnlyDocs(root)): string {
   const lines = [
     `# ${site.title}`,
     '',
     `> ${site.description}`,
     '',
-    '页面 URL 去掉末尾斜杠再加 `.md` 即为该页原始 Markdown(根路径用 `/index.md`);下方列表是各页精确地址。Drop any trailing slash and append `.md` to a page URL for its raw Markdown (the site root is `/index.md`); the list below carries the exact addresses.',
+    (englishOnly ? '' : '页面 URL 去掉末尾斜杠再加 `.md` 即为该页原始 Markdown(根路径用 `/index.md`);下方列表是各页精确地址。')
+    + 'Drop any trailing slash and append `.md` to a page URL for its raw Markdown (the site root is `/index.md`); the list below carries the exact addresses.',
   ]
   for (const { heading, locale } of llmsTxtLocales) {
+    if (englishOnly && locale !== 'en') continue
     lines.push('', `## ${heading}`, '')
     for (const collection of localeCollections[locale]) {
       for (const page of orderedPages(locale, collection)) {

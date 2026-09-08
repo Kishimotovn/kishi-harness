@@ -3,8 +3,8 @@
  * Typert catalog projection. Every harness `ctx.<key>` service and event scope
  * maps to exactly one `docs/subsystems/` page through the curated tables below;
  * the generator injects each page's Cordis API reference between its GENERATED markers —
- * into both language sides of the pair, localizing paired document paths for
- * the Chinese side while retaining every other byte — and re-records a pair's
+ * into maintained language sides, localizing paired document paths for
+ * the Chinese side in bilingual mode — and re-records a pair's
  * `.i18n.yaml` only when nothing outside the region changed. The
  * projection enforces event modes, JSDoc parameter/return completeness, and
  * signature type-link coverage; the inherited (vendor) tier renders to
@@ -30,6 +30,7 @@ import {
 import type { CordisCatalogPolicy } from '@deepseek-ai/dsh-typert-generator'
 import { renderCordisCoreApiPages } from './cordis-core-api.ts'
 import { contextKeyMap, contextMergeFiles, eventNameList } from './cordis-walk.ts'
+import { englishOnlyDocs } from './doc-policy.ts'
 import {
   blobHash,
   parsePairMeta,
@@ -981,6 +982,7 @@ export function walkPartitionProblems(input: WalkPartitionInput, maps: WalkParti
  * @returns `[repo-relative path, exact content]` for every generated artifact.
  */
 export function computeOutputs(): [string, string][] {
+  const englishOnly = englishOnlyDocs(root)
   const { projector, model } = projectCordisCatalog(root, CORDIS_CATALOG_POLICY)
   const services = [...model.services]
   const events = [...model.events]
@@ -1021,7 +1023,7 @@ export function computeOutputs(): [string, string][] {
       events.filter(e => EVENT_SCOPE_PAGE[e.scope] === page),
       CORDIS_CATALOG_POLICY,
     )
-    for (const side of [page, page.replace(/\.md$/, '.zh.md')]) {
+    for (const side of englishOnly ? [page] : [page, page.replace(/\.md$/, '.zh.md')]) {
       const rel = `${SUBSYSTEMS_DIR}/${side}`
       const localizedRegion = localizePageRegion(region, rel)
       let current: string
@@ -1046,7 +1048,7 @@ export function computeOutputs(): [string, string][] {
 
 /**
  * Re-record a pair's `.i18n.yaml` after a region write ONLY when the write is
- * region-confined: both sides' region-stripped content must be byte-equal to
+ * region-confined and bilingual maintenance is enabled: both sides' region-stripped content must be byte-equal to
  * the region-stripped previous content whose hashes the record holds. The
  * caller supplies the previous bytes (read before writing); human-content
  * drift leaves the record untouched so the pairing gate still demands the
@@ -1057,6 +1059,7 @@ export function computeOutputs(): [string, string][] {
  * @returns true when the record was refreshed.
  */
 export function maybeRecordPair(pageRel: string, before: Map<string, Buffer>, scanRoot: string = root): boolean {
+  if (englishOnlyDocs(scanRoot)) return false
   const zhRel = pageRel.replace(/\.md$/, '.zh.md')
   const metaRel = pageRel.replace(/\.md$/, '.i18n.yaml')
   const metaAbs = resolve(scanRoot, metaRel)

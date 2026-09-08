@@ -11,8 +11,10 @@ import { existsSync, globSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { load } from 'js-yaml'
 import { describe, expect, it } from 'vitest'
+import { englishOnlyDocs, isMaintainedDoc } from './doc-policy.ts'
 
 const root = resolve(import.meta.dirname, '..')
+const englishOnly = englishOnlyDocs(root)
 const PACKAGE_README_GLOBS = [
   'packages/README.md',
   'packages/README.zh.md',
@@ -26,6 +28,7 @@ function packageReadmes(): string[] {
   return PACKAGE_README_GLOBS
     .flatMap(pattern => globSync(pattern, { cwd: root, exclude: ['**/node_modules/**'] }))
     .map(file => file.replaceAll('\\', '/'))
+    .filter(file => isMaintainedDoc(file, englishOnly))
     .sort()
 }
 
