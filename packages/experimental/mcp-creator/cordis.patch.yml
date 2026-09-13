@@ -1,0 +1,19 @@
+# Local development layer: stdout belongs to the MCP connection.
+- id: web-runtime
+  inject: [webStartup]
+  config:
+    openBrowser: !!js ctx.webStartup.openBrowser
+    printUrl: false
+    surfaceContext: false
+    trustedHosts: []
+
+- id: session-title-llm
+  disabled: true
+
+- insert:
+    - id: creator-mcp
+      name: '@deepseek-ai/dsh-experimental-mcp-creator'
+      config:
+        cwd: !!js process.cwd()
+        sessionId: !!js "'creator-' + process.getBuiltinModule('node:crypto').randomUUID()"
+        callTimeoutMs: 60000

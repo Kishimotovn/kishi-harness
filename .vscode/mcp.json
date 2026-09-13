@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "dshCreator": {
+      "type": "stdio",
+      "command": "node",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "${workspaceFolder}/apps/cli/lib/bin.js",
+        "--profile",
+        "web",
+        "--port",
+        "0"
+      ],
+      "env": {
+        "DSH_HOME": "${env:HOME}/.dsh-kishi-creator",
+        "DSH_TELEMETRY_DISABLED": "1"
+      }
+    }
+  }
+}
