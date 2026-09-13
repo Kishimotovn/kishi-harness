@@ -9,13 +9,25 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   concurrency: unknown
   env: Record<string, string>
   jobs: Record<'preview', {
+    if?: string
     'runs-on': string
-    steps: Array<{ name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> }>
+    steps: Array<{ name?: string; if?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> }>
   }>
 }
 const preview = workflow.jobs.preview
 
 describe('PR preview workflow', () => {
+  it('builds in forks without deploying or advertising an upstream preview', () => {
+    expect(preview.if).toBeUndefined()
+    const deploymentSteps = ['Upload to Cloudflare Pages', 'Verify the protected deployment serves the image', 'Comment the preview URL']
+    for (const name of deploymentSteps) {
+      expect(preview.steps.find(step => step.name === name)?.if).toBe("github.repository == 'deepseek-ai/deepseek-harness'")
+    }
+    for (const step of preview.steps.filter(step => !deploymentSteps.includes(step.name ?? ''))) {
+      expect(step.if).toBeUndefined()
+    }
+  })
+
   it('keeps every PR author on the selected GitHub-hosted runner', () => {
     expect(Object.keys(workflow.jobs)).toEqual(['preview'])
     expect(preview['runs-on']).toBe('ubuntu-24.04')
