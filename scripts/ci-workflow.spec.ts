@@ -9,6 +9,51 @@ const runnerPrivatePnpmDestination = /^\$\{\{ runner\.temp \}\}\/setup-pnpm-\$\{
 const nativeWindowsPnpmDestination = '${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
 
 describe('CI workflow', () => {
+  it.each([
+    ['node-24', 'dsh-ubuntu-24-04-16core', 'ubuntu-24.04'],
+    ['node-24-coverage', 'dsh-ubuntu-24-04-16core', 'ubuntu-24.04'],
+    ['node-24-consumers', 'dsh-ubuntu-24-04-16core', 'ubuntu-24.04'],
+    ['windows-build', 'dsh-windows-2025-16core', 'windows-2025'],
+    ['windows-coverage', 'dsh-windows-2025-16core', 'windows-2025'],
+    ['windows-native-tests', 'dsh-windows-2025-16core', 'windows-2025'],
+    ['windows-observational', 'dsh-windows-2025-16core', 'windows-2025'],
+  ])('%s defaults to a standard hosted runner in forks', (jobName, upstream, fork) => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), jobName)
+    expect(String(job['runs-on']).replace(/\s+/g, ' ')).toContain(`|| github.repository == 'deepseek-ai/deepseek-harness' && '${upstream}' || '${fork}' }}`)
+  })
+
+  it.each([
+    ['node-24', 'DSH_GATE_CONCURRENCY', '8', '2'],
+    ['node-24-coverage', 'DSH_COVERAGE_MAX_WORKERS', '6', '2'],
+    ['node-24-coverage', 'DSH_COVERAGE_PARTITIONS', '4', '2'],
+    ['node-24-coverage', 'DSH_GATE_CONCURRENCY', '3', '1'],
+    ['node-24-consumers', 'DSH_GATE_CONCURRENCY', '10', '2'],
+    ['node-24-consumers', 'DSH_OXLINT_THREADS', '8', '2'],
+    ['node-24-consumers', 'DSH_PUBLINT_CONCURRENCY', '8', '2'],
+    ['windows-coverage', 'DSH_COVERAGE_MAX_WORKERS', '6', '2'],
+    ['windows-coverage', 'DSH_COVERAGE_PARTITIONS', '4', '2'],
+    ['windows-coverage', 'DSH_GATE_CONCURRENCY', '3', '1'],
+    ['windows-observational', 'DSH_PUBLINT_CONCURRENCY', '8', '2'],
+  ])('%s bounds %s for smaller fork runners', (jobName, variable, upstream, fork) => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), jobName)
+    expect(job.env).toHaveProperty(variable, `\${{ github.repository != 'deepseek-ai/deepseek-harness' && '${fork}' || '${upstream}' }}`)
+  })
+
+  it.each(['node-24-coverage', 'windows-coverage'])('%s retains the hosted teardown budget', (jobName) => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), jobName)
+    expect(job.env).toHaveProperty('DSH_COVERAGE_TEST_TIMEOUT_MS', '90000')
+  })
+
+  it('selects serial browser replay in forks', () => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-consumers')
+    expect(job.env).toHaveProperty('DSH_WEB_SNAPSHOT_WORKERS', "${{ github.repository == 'deepseek-ai/deepseek-harness' && '6' || '' }}")
+  })
+
+  it('bounds fork snapshot concurrency while preserving upstream failover sizing', () => {
+    const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-consumers')
+    expect(job.env).toHaveProperty('DSH_SNAPSHOT_MAX_CONCURRENCY', "${{ github.repository != 'deepseek-ai/deepseek-harness' && '2' || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]' && '12' || '32' }}")
+  })
+
   it.each(['ci.yml', 'ci-master.yml', 'e2e.yml', 'release.yml', 'release-vendor.yml'])(
     '%s cancels superseded validation runs without crossing workflow or ref boundaries', (name) => {
       const workflow = loadWorkflow('.github/workflows/' + name)
@@ -214,9 +259,7 @@ describe('CI workflow', () => {
       expect(install!.run).not.toContain('$cloneFlag')
     }
 
-    // windows-coverage uses the lower 4-partition profile.
     expect(windowsCoverage.name).toBe('windows node 24 / coverage')
-    expect(windowsCoverage.env).toMatchObject({ DSH_COVERAGE_PARTITIONS: '4' })
     const coverageSteps = windowsCoverage.steps as unknown[]
     const coverageCommands = coverageSteps.filter((step): step is Record<string, unknown> & { run: string } => (
       isRecord(step) && typeof step.run === 'string'
@@ -327,26 +370,27 @@ describe('CI workflow', () => {
       linuxAggregate: aggregate['runs-on'] as string,
       windows: windowsBuild['runs-on'] as string,
     }
-    const evaluate = (expression: string, vars: Record<string, string>, login = 'maintainer'): unknown => {
+    const evaluate = (expression: string, vars: Record<string, string>, login: string, repository: string): unknown => {
       const body = expression.trim().slice(3, -2)
       return runInNewContext(body, {
         vars,
         fromJSON: JSON.parse,
-        github: { event: { pull_request: { user: { login } } } },
+        github: { repository, event: { pull_request: { user: { login } } } },
       }, { timeout: 1000 })
     }
-    for (const [name, selector, variable, pool, hosted] of [
-      ['linux gates', selectors.linux, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'dsh-ubuntu-24-04-16core'],
-      ['linux aggregate', selectors.linuxAggregate, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'ubuntu-latest'],
-      ['windows lanes', selectors.windows, 'DSH_CI_FAILOVER_WINDOWS', ['self-hosted', 'dsh-win-ci', 'windows'], 'dsh-windows-2025-16core'],
+    for (const [name, selector, variable, pool, hosted, forkHosted] of [
+      ['linux gates', selectors.linux, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'dsh-ubuntu-24-04-16core', 'ubuntu-24.04'],
+      ['linux aggregate', selectors.linuxAggregate, 'DSH_CI_FAILOVER_LINUX', ['self-hosted', 'linux', 'x64', 'vm-backup'], 'ubuntu-latest', 'ubuntu-latest'],
+      ['windows lanes', selectors.windows, 'DSH_CI_FAILOVER_WINDOWS', ['self-hosted', 'dsh-win-ci', 'windows'], 'dsh-windows-2025-16core', 'windows-2025'],
     ] as const) {
-      expect(evaluate(selector, { [variable]: 'blacksmith' }), `${name} blacksmith value`).toMatch(/^blacksmith-/)
-      expect(evaluate(selector, { [variable]: 'selfhosted' }), `${name} selfhosted value`).toEqual(pool)
-      // The blacksmith branch must not capture the selfhosted pool, and the
-      // dependabot exclusion applies to the pool, not to the blacksmith tier.
-      expect(evaluate(selector, { [variable]: 'selfhosted' }, 'dependabot[bot]'), `${name} dependabot on selfhosted`).toBe(hosted)
-      for (const mode of ['', 'hosted', 'unexpected']) {
-        expect(evaluate(selector, { [variable]: mode }), `${name} default on ${mode}`).toBe(hosted)
+      for (const [repository, expectedHosted] of [['deepseek-ai/deepseek-harness', hosted], ['Kishimotovn/kishi-harness', forkHosted]] as const) {
+        expect(evaluate(selector, { [variable]: 'blacksmith' }, 'maintainer', repository), `${name} blacksmith value`).toMatch(/^blacksmith-/)
+        expect(evaluate(selector, { [variable]: 'blacksmith' }, 'dependabot[bot]', repository), `${name} dependabot on blacksmith`).toMatch(/^blacksmith-/)
+        expect(evaluate(selector, { [variable]: 'selfhosted' }, 'maintainer', repository), `${name} selfhosted value`).toEqual(pool)
+        expect(evaluate(selector, { [variable]: 'selfhosted' }, 'dependabot[bot]', repository), `${name} dependabot on selfhosted`).toBe(expectedHosted)
+        for (const mode of ['', 'hosted', 'unexpected']) {
+          expect(evaluate(selector, { [variable]: mode }, 'maintainer', repository), `${name} default on ${mode}`).toBe(expectedHosted)
+        }
       }
     }
 
@@ -934,19 +978,15 @@ describe('Weighted approval workflow', () => {
 })
 
 describe('Issue lifecycle workflow', () => {
-  it('runs the lifecycle job on every PR/review event but gates token and board steps', () => {
+  it('runs upstream PR/review events but gates token and board steps', () => {
     const lifecycle = loadWorkflow('.github/workflows/issue-lifecycle.yml')
     const policy = loadWorkflow('.github/workflows/issue-policy.yml')
     const lifecycleJob = workflowJob(lifecycle, 'lifecycle')
     if (!Array.isArray(lifecycleJob.steps)) throw new TypeError('Issue lifecycle job must define steps')
 
-    // The job has no job-level `if`, so it is listed on every pull_request /
-    // pull_request_review event and reports success instead of a gray skip. The
-    // write-capable steps are gated at step level so approved/commented reviews
-    // never mint a Project/Issue App token nor touch the board.
     expect(lifecycle.on).toHaveProperty('pull_request')
     expect(lifecycle.on).toHaveProperty('pull_request_review')
-    expect(lifecycleJob.if).toBeUndefined()
+    expect(lifecycleJob.if).toBe("github.repository == 'deepseek-ai/deepseek-harness'")
     // Keep the subscription-type gates: issue-lifecycle does not re-subscribe
     // ready_for_review (issue-policy owns that) and only reacts to submitted
     // review events.
@@ -978,6 +1018,7 @@ describe('Issue lifecycle workflow', () => {
     const humanPullRequest =
       "${{ github.event.pull_request.user.type != 'Bot' && github.event.pull_request.user.type != 'App' }}"
 
+    expect(policyJob.if).toBe("github.repository == 'deepseek-ai/deepseek-harness'")
     expect(tokenStep).toMatchObject({
       id: 'app-token',
       if: humanPullRequest,
