@@ -30,6 +30,12 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@deepseek-ai/dsh-experimental-mcp-creator": "workspace:^",
+    "@deepseek-ai/dsh-agent-presets": "workspace:^",
+    "@deepseek-ai/dsh-cordis-host-runner": "workspace:^",
+    "@deepseek-ai/dsh-session-title": "workspace:^",
+    "@deepseek-ai/dsh-workspace": "workspace:^",
+    "@modelcontextprotocol/sdk": "^1.12.0",
     "@deepseek-ai/cordis-plugin-group": "workspace:^",
     "@deepseek-ai/dsh-client-modules": "workspace:^",
     "@deepseek-ai/dsh-client-store": "workspace:^",

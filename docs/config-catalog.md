@@ -717,6 +717,26 @@ export interface InspectorOptions {
 
 Source: [`packages/experimental/inspector/src/index.ts:66`](../packages/experimental/inspector/src/index.ts)
 
+<a id="deepseek-aidsh-experimental-mcp-creator"></a>
+
+## `@deepseek-ai/dsh-experimental-mcp-creator`
+
+Requires: `agents` · `agentLoop` · `agentPresets` · `commands` · `tools` · `workspaceRegistry` · `webRuntime` · `webServer` · `sessionTitle` · `connection`
+
+```ts config-catalog
+/** Explicit ownership and timeout settings for the local bridge. */
+export interface Config {
+  /** Existing absolute workspace directory used by the dedicated Session. */
+  cwd: string
+  /** New Session identity; a collision fails rather than adopting another Session. */
+  sessionId: string
+  /** Maximum elapsed time for one creator call, including waiting for a browser. */
+  callTimeoutMs: number
+}
+```
+
+Source: [`packages/experimental/mcp-creator/src/index.ts:23`](../packages/experimental/mcp-creator/src/index.ts)
+
 <a id="deepseek-aidsh-experimental-tool-agent-team"></a>
 
 ## `@deepseek-ai/dsh-experimental-tool-agent-team`
