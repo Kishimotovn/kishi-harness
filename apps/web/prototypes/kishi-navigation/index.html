@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kishi navigation prototype</title>
+  <link rel="icon" href="../../public/favicon.svg">
+  <link rel="stylesheet" href="prototype.css">
+  <script src="prototype.js" defer></script>
+</head>
+<body>
+  <div class="prototype-banner"><strong>Navigation prototype</strong><span>Sample data. Changes stay in this tab.</span><label>Scenario <select id="scenario"><option value="review">Review disagreement</option><option value="missing-review">Missing reviewer result</option><option value="unavailable">Issue unavailable</option><option value="closed">Issue closed externally</option><option value="uncertain">GitHub write uncertain</option><option value="interrupted">Application restarted</option><option value="model">Model unavailable</option><option value="cancelling">Cancellation pending</option></select></label><button type="button" id="inspect-state">State</button><button type="button" id="reset-demo">Reset</button></div>
+  <div id="app"></div>
+  <nav class="variant-switcher" aria-label="Prototype variants">
+    <button type="button" id="previous-variant" aria-label="Previous layout" title="Previous layout">&larr;</button>
+    <output id="variant-label"></output>
+    <button type="button" id="next-variant" aria-label="Next layout" title="Next layout">&rarr;</button>
+  </nav>
+  <dialog id="dialog"></dialog>
+  <div id="notice" role="status" aria-live="polite"></div>
+</body>
+</html>
