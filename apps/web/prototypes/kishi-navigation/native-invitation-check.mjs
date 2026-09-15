@@ -75,13 +75,17 @@ const output = await build({
         import * as React from 'react';
         import { createRoot } from 'react-dom/client';
         const entries = new Map();
+        const sectionLabels = new Map();
+        let updateEntries = () => {};
         const slots = {
           inject(_name, register) { return register(); },
           register(options, component) {
             const id = options.id ?? options.key ?? options.name;
             if (id === 'kishi-activity-prototype') throw new Error('Audit presentation belongs inline, not in an Activity popup');
             entries.set(id, component);
-            return () => entries.delete(id);
+            if (options.name === 'settings.section') sectionLabels.set(id, options.label);
+            updateEntries();
+            return () => { entries.delete(id); updateEntries(); };
           },
         };
         const host = { async call(method) {
@@ -102,15 +106,34 @@ const output = await build({
           return () => style.remove();
         } };
         ${source}
-        createNativeNavigationPrototype().apply({ get() { return slots; }, effect(register) { register(); } });
+        const workspace = { startSession() { document.getElementById('request-result').textContent = 'Native conversation opened'; } };
+        const services = { slots, uiWorkspace: workspace };
+        createNativeNavigationPrototype().apply({ get(name) { return services[name]; }, effect(register) { register(); } });
         function Check() {
           const [section, setSection] = React.useState('kishi-users-prototype');
+          const [, setRevision] = React.useState(0);
+          React.useEffect(() => {
+            updateEntries = () => setRevision(revision => revision + 1);
+            return () => { updateEntries = () => {}; };
+          }, []);
+          const nativeModel = entries.get('conversation.input.model');
           return React.createElement(React.Fragment, null,
             React.createElement('select', { 'aria-label': 'Check section', value: section, onChange: event => setSection(event.target.value) },
-              ['kishi-users-prototype', 'kishi-global-prototype', 'kishi-repository-prototype'].map(id => React.createElement('option', { key: id, value: id }, id))),
+              ['kishi-users-prototype', 'kishi-global-prototype', 'kishi-repository-prototype', 'models', 'plugins', 'agent-presets'].map(id => React.createElement('option', { key: id, value: id }, sectionLabels.get(id) ?? id))),
             React.createElement('details', null, React.createElement('summary', null, 'Sample work navigation'), React.createElement(entries.get('sidebar.workspaces'), { wide: true })),
+            React.createElement('p', { id: 'request-result', role: 'status' }),
+            React.createElement('section', { 'aria-label': 'Native General settings' },
+              ['language', 'appearance', 'font-size', 'permission', 'transcript-view', 'composer-enter'].map(id => entries.has(id)
+                ? React.createElement(entries.get(id), { key: id })
+                : React.createElement('button', { key: id }, 'Native ' + id))),
+            nativeModel ? React.createElement(nativeModel) : React.createElement('button', null, 'Native model selector'),
+            entries.has('conversation.input.plan') ? React.createElement(entries.get('conversation.input.plan')) : React.createElement('button', null, 'Native permission selector'),
+            entries.has('cordis-panel') ? React.createElement(entries.get('cordis-panel')) : React.createElement('button', null, 'Native plugin manager'),
+            entries.has('sidebar.settings') ? React.createElement(entries.get('sidebar.settings'), { wide: true }) : React.createElement('button', null, 'Native settings'),
+            entries.has('open-document') ? React.createElement(entries.get('open-document')) : React.createElement('button', null, 'Native configuration file'),
+            React.createElement(entries.get('self')),
             section === 'kishi-global-prototype' && entries.has('model-settings') && React.createElement(entries.get('model-settings'), { provider: { provider: 'dedicated', displayName: 'Second configuration' }, configured: true }),
-            React.createElement(entries.get(section)));
+            entries.has(section) ? React.createElement(entries.get(section)) : React.createElement('button', null, 'Native ' + section + ' administration'));
         }
         createRoot(document.getElementById('root')).render(React.createElement(Check));
       `;
@@ -174,6 +197,32 @@ try {
   assert.equal(await users.getByRole('button').count(), 4);
   assert.equal(await details.getByRole('checkbox', { name: 'Studio docs', exact: true }).isChecked(), true);
 
+  const atlasAssignment = details.getByRole('checkbox', { name: 'Atlas', exact: true });
+  const saveAssignments = details.getByRole('button', { name: 'Save changes', exact: true });
+  const discardAssignments = details.getByRole('button', { name: 'Discard', exact: true });
+  await atlasAssignment.check();
+  assert.equal(await saveAssignments.isEnabled(), true);
+  await discardAssignments.click();
+  assert.equal(await atlasAssignment.isChecked(), false);
+  await atlasAssignment.check();
+  await saveAssignments.click();
+  await users.getByRole('button', { name: 'Minh Nguyen', exact: true }).click();
+  await users.getByRole('button', { name: 'another.member@example.test', exact: true }).click();
+  assert.equal(await atlasAssignment.isChecked(), true);
+  await details.getByRole('button', { name: 'Disable access', exact: true }).click();
+  await details.getByRole('button', { name: 'Keep access', exact: true }).click();
+  assert.equal(await details.getByText('Access enabled', { exact: true }).isVisible(), true);
+  await details.getByRole('button', { name: 'Disable access', exact: true }).click();
+  await details.getByRole('button', { name: 'Confirm disable access', exact: true }).click();
+  assert.equal(await details.getByText('Access disabled', { exact: true }).isVisible(), true);
+  assert.equal(await details.getByRole('button', { name: 'Resend invitation', exact: true }).isEnabled(), false);
+  assert.equal(await users.getByRole('button').count(), 4);
+  assert.equal(await atlasAssignment.isChecked(), true);
+  await details.getByRole('button', { name: 'Re-enable access', exact: true }).click();
+  assert.equal(await details.getByText('Access enabled', { exact: true }).isVisible(), true);
+  assert.equal(await atlasAssignment.isChecked(), true);
+  assert.equal(await details.getByRole('checkbox', { name: 'Studio docs', exact: true }).isChecked(), true);
+
   await page.getByRole('button', { name: 'Invite user', exact: true }).click();
   await email.fill('pending.member@example.test');
   for (const width of [1280, 390]) {
@@ -184,6 +233,8 @@ try {
   }
 
   const section = page.getByRole('combobox', { name: 'Check section', exact: true });
+  assert.deepEqual((await section.locator('option').allTextContents()).slice(0, 3), ['Users', 'Global', 'Repositories']);
+  assert.equal(await page.getByRole('button', { name: 'Native language', exact: true }).count(), 0);
   const planning = page.getByRole('combobox', { name: 'Planning', exact: true });
   const autoMerge = page.getByRole('checkbox', { name: 'Auto-merge', exact: true });
   const save = page.getByRole('button', { name: 'Save changes', exact: true });
@@ -193,6 +244,7 @@ try {
   const secondModel = JSON.stringify(['dedicated', 'alpha']);
   await section.selectOption('kishi-global-prototype');
   await save.waitFor({ state: 'visible' });
+  assert.equal(await page.getByRole('heading', { name: 'New Session defaults', exact: true }).isVisible(), true);
   assert.equal(await save.isEnabled(), false);
   const reviewers = page.getByRole('group', { name: 'Reviewers', exact: true });
   const primaryReviewer = reviewers.getByRole('checkbox', { name: 'Configured Alpha (Primary configuration)', exact: true });
@@ -338,16 +390,103 @@ try {
   assert.equal(await page.getByRole('region', { name: 'Activity history', exact: true }).count(), 0);
   await page.getByText('Sample work navigation', { exact: true }).click();
   const navigation = page.locator('.knp-browser');
+  assert.equal(await navigation.getByRole('button', { name: 'Picker', exact: true }).count(), 0);
+  await navigation.getByRole('button', { name: 'New request', exact: true }).click();
+  await page.getByText('Native conversation opened', { exact: true }).waitFor();
+  assert.equal(await navigation.getByRole('textbox', { name: 'Request title', exact: true }).count(), 0);
   await navigation.locator('[data-knp-work="invites"]').click();
   assert.equal(await navigation.locator('[data-knp-work="invites"]').getAttribute('aria-pressed'), 'true');
   await navigation.locator('.knp-field select').selectOption('docs');
   assert.equal(await navigation.locator('[data-knp-work="guide"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.getByRole('button', { name: 'Native model selector', exact: true }).count(), 1);
   await navigation.locator('.knp-footer select').selectOption('member');
   assert.equal(await navigation.locator('[data-knp-work="guide"]').count(), 0);
   assert.equal(await navigation.locator('[data-knp-work="policy"]').getAttribute('aria-pressed'), 'true');
+  for (const label of ['Native permission selector', 'Native plugin manager', 'Native configuration file']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Native settings', exact: true }).count(), 1);
+  assert.deepEqual(await page.getByRole('region', { name: 'Native General settings', exact: true }).getByRole('button').allTextContents(), ['Native appearance', 'Native font-size']);
+  await section.selectOption('kishi-repository-prototype');
+  await page.getByRole('heading', { name: 'Atlas settings', exact: true }).waitFor();
+  assert.equal(await planning.isDisabled(), true);
+  assert.equal(await autoMerge.isDisabled(), true);
+  assert.equal(await reviewers.getByRole('checkbox', { disabled: false }).count(), 0);
+  assert.equal(await skills.getByRole('checkbox', { disabled: false }).count(), 0);
+  assert.equal(await save.count(), 0);
+  assert.equal(await discard.count(), 0);
+  assert.deepEqual(await page.locator('.knp-settings').getByRole('combobox', { name: 'Repository', exact: true }).locator('option').allTextContents(), ['Atlas']);
+  for (const settingsSection of ['kishi-global-prototype', 'kishi-users-prototype', 'models', 'plugins', 'agent-presets']) {
+    await section.selectOption(settingsSection);
+    await page.getByText('Administrator access required', { exact: true }).waitFor();
+    assert.equal(await planning.count(), 0);
+    assert.equal(await reviewers.count(), 0);
+    assert.equal(await skills.count(), 0);
+    assert.equal(await save.count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Native model selector', exact: true }).count(), 0);
+  }
+  await navigation.locator('.knp-footer select').selectOption('admin');
+  await section.selectOption('kishi-repository-prototype');
+  assert.equal(await page.getByRole('button', { name: 'Native model selector', exact: true }).count(), 1);
+  for (const label of ['Native permission selector', 'Native plugin manager', 'Native settings', 'Native configuration file']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 1);
+  assert.equal(await page.locator('.knp-personal').count(), 0);
+  assert.deepEqual(await page.getByRole('region', { name: 'Native General settings', exact: true }).getByRole('button').allTextContents(), ['Native appearance', 'Native font-size', 'Native permission', 'Native transcript-view', 'Native composer-enter']);
+  const settingsRepository = page.locator('.knp-settings').getByRole('combobox', { name: 'Repository', exact: true });
+  assert.deepEqual(await settingsRepository.locator('option').allTextContents(), ['Atlas', 'Studio docs']);
+  const atlasAutoMerge = await autoMerge.isChecked();
+  await autoMerge.setChecked(!atlasAutoMerge);
+  await settingsRepository.selectOption('docs');
+  await page.getByRole('heading', { name: 'Studio docs settings', exact: true }).waitFor();
+  assert.equal(await save.isEnabled(), false);
+  const docsAutoMerge = await autoMerge.isChecked();
+  await autoMerge.setChecked(!docsAutoMerge);
+  await settingsRepository.selectOption('atlas');
+  assert.equal(await autoMerge.isChecked(), !atlasAutoMerge);
+  await save.click();
+  await settingsRepository.selectOption('docs');
+  assert.equal(await autoMerge.isChecked(), !docsAutoMerge);
+  assert.equal(await save.isEnabled(), true);
+  await discard.click();
+  assert.equal(await autoMerge.isChecked(), docsAutoMerge);
+  await settingsRepository.selectOption('atlas');
+  assert.equal(await autoMerge.isChecked(), !atlasAutoMerge);
+  assert.equal(await save.isEnabled(), false);
+  const savedAutoMerge = await autoMerge.isChecked();
+  await autoMerge.setChecked(!savedAutoMerge);
+  await navigation.locator('.knp-footer select').selectOption('member');
+  assert.equal(await autoMerge.isChecked(), savedAutoMerge);
+  assert.equal(await autoMerge.isDisabled(), true);
+  assert.equal(await save.count(), 0);
+  await navigation.locator('.knp-footer select').selectOption('admin');
+  assert.equal(await autoMerge.isChecked(), !savedAutoMerge);
+  await discard.click();
+  assert.equal(await autoMerge.isChecked(), savedAutoMerge);
+  const presentation = page.getByRole('figure', { name: 'Conversation presentation sample', exact: true });
+  const previewLink = presentation.getByRole('link', { name: 'Open preview', exact: true });
+  assert.equal(await previewLink.getAttribute('target'), '_blank');
+  assert.equal(await previewLink.getAttribute('rel'), 'noopener noreferrer');
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const responseBounds = await presentation.locator('.knp-sample-response p').boundingBox();
+    const attributionBounds = await presentation.locator('.knp-sample-attribution').boundingBox();
+    assert.ok(responseBounds && attributionBounds);
+    assert.ok(attributionBounds.y >= responseBounds.y + responseBounds.height);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await presentation.screenshot({ path: join(screenshots, `presentation-${width}.png`) });
+  }
+  let previewRequests = 0;
+  await page.context().route('https://atlas-215.preview.example.test/', route => {
+    previewRequests++;
+    assert.equal(route.request().headers().referer, undefined);
+    return route.fulfill({ contentType: 'text/html', body: '<!doctype html><html lang="en"><head><title>Sample application</title></head><body>Sample application</body></html>' });
+  });
+  const [previewPage] = await Promise.all([page.waitForEvent('popup'), previewLink.click()]);
+  await previewPage.waitForLoadState('domcontentloaded');
+  assert.equal(await previewPage.title(), 'Sample application');
+  assert.equal(await previewPage.evaluate(() => window.opener === null), true);
+  assert.equal(previewRequests, 1);
+  await previewPage.close();
   assert.deepEqual(errors, []);
   assert.deepEqual(requests, []);
-  console.log('PASS: invitations, staged settings, model filtering, sample navigation, no Activity popup, desktop/mobile width, no network requests.');
+  console.log('PASS: invitations, staged repository settings, member read-only saved values, English-only native settings, role controls, attribution footer, isolated new-tab link, desktop/mobile width, no external network requests.');
   console.log(`Screenshots: ${screenshots}`);
 } finally {
   await browser.close();

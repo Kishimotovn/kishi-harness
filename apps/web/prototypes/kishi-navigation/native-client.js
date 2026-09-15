@@ -3,8 +3,9 @@ function createNativeNavigationPrototype() {
   const repos = [{ id: 'atlas', name: 'Atlas', slug: 'example/atlas' }, { id: 'docs', name: 'Studio docs', slug: 'example/studio-docs' }];
   const modelRoles = ['planning', 'building', 'aggregator', 'qa'];
   let refreshModels;
+  let startRequest;
   let state = {
-    variant: 0, repo: 'atlas', selected: 'policy', showAfk: false, picker: false, creating: false,
+    variant: 0, repo: 'atlas', selected: 'policy', showAfk: false,
     role: 'admin', query: '', notice: '', sequence: 300,
     global: { planning: '', building: '', aggregator: '', qa: '', reviewers: [], skills: [], autoMerge: true, finalClosureAck: false, cycleLimit: 2 },
     overrides: { atlas: {}, docs: {} },
@@ -12,7 +13,7 @@ function createNativeNavigationPrototype() {
     modelCatalog: { status: 'loading', models: [], errors: [], skills: [], skillErrors: [] },
     modelAccess: {}, modelAccessDrafts: {},
     people: [{ id: 'minh', name: 'Minh Nguyen', email: 'minh@example.test', repos: ['atlas'], invited: true }, { id: 'linh', name: 'Linh Le', email: 'linh@example.test', repos: ['docs'], invited: false }],
-    person: 'linh', emailFails: false,
+    person: 'linh', peopleDrafts: {}, emailFails: false,
     items: [
       { id: 'invites', repo: 'atlas', parent: null, title: 'Invite the team', issue: 214, type: 'Feature', mode: 'HITL', status: 'Waiting for human' },
       { id: 'policy', repo: 'atlas', parent: 'invites', title: 'Invitation policy', issue: 215, type: 'Grilling', mode: 'HITL', status: 'Waiting for human' },
@@ -50,7 +51,7 @@ function createNativeNavigationPrototype() {
     return node('button', {
       type: 'button', className: 'knp-work' + (child ? ' knp-child' : ''),
       'aria-pressed': current.selected === item.id, 'data-knp-work': item.id,
-      onClick: () => update({ selected: item.id, repo: item.repo, picker: false, notice: '' }),
+      onClick: () => update({ selected: item.id, repo: item.repo, notice: '' }),
     }, node('strong', null, item.title),
     node('small', null, item.issue ? '#' + item.issue : 'Not attached', ' / ', item.type, ' / ', item.mode),
     node('span', { className: 'knp-status', 'data-state': item.status }, item.status));
@@ -70,40 +71,20 @@ function createNativeNavigationPrototype() {
         node('small', { className: 'knp-repo-caption' }, repos.find(repo => repo.id === item.repo).name), node(WorkRow, { item }))),
       current.showAfk && node('h3', null, 'Other work'), background.map(item => node(WorkRow, { key: item.id, item })));
   }
-  function Picker({ current }) {
-    const selected = current.items.find(item => item.id === current.selected);
-    return node('div', { className: 'knp-focus' }, node('small', null, 'Selected work'), node('h3', null, selected.title),
-      node('p', { className: 'knp-status', 'data-state': selected.status }, selected.status),
-      command(current.picker ? 'Close work list' : 'Choose work item', () => update({ picker: !current.picker }), { className: 'knp-outline' }),
-      current.picker && node(Backlog, { current }));
-  }
-  function NewRequest() {
-    const [title, setTitle] = React.useState('');
-    const [route, setRoute] = React.useState('Wayfinder');
-    return node('form', { className: 'knp-form', onSubmit: event => {
-      event.preventDefault();
-      if (!title.trim()) return;
-      const id = 'sample-' + state.sequence;
-      update({ items: [{ id, title: title.trim(), repo: state.repo, parent: null, issue: null, type: route, mode: 'HITL', status: 'Ready' }, ...state.items], selected: id, creating: false, sequence: state.sequence + 1, notice: 'Sample request created. No issue or session was created.' });
-    } }, node('label', null, 'Request title', node('input', { value: title, required: true, maxLength: 160, onChange: event => setTitle(event.target.value) })),
-    node('label', null, 'Start with', node('select', { value: route, onChange: event => setRoute(event.target.value) }, ['Wayfinder', 'Grill with docs'].map(value => node('option', { key: value }, value)))),
-    node('div', { className: 'knp-actions' }, node('button', { type: 'submit', className: 'knp-outline' }, 'Create sample'), command('Dismiss', () => update({ creating: false }))));
-  }
   function BrowserRegion(props) {
     const current = usePrototype();
     const availableRepos = repos.filter(repo => current.role === 'admin' || repo.id === 'atlas');
     if (!props.wide) return command('Work', props.expandSidebar, { title: 'Open prototype backlog', className: 'knp-rail' });
     return node('section', { className: 'knp-browser knp', 'aria-label': 'Kishi navigation prototype' },
       node('div', { className: 'knp-heading' }, node('h2', null, 'Kishi'), node('small', null, 'Prototype / sample data')),
-      node('div', { className: 'knp-variants', role: 'group', 'aria-label': 'Navigation variant' }, ['Backlog', 'Attention', 'Picker'].map((title, index) => command(title, () => update({ variant: index, picker: false }), { key: title, 'aria-pressed': current.variant === index }))),
+      node('div', { className: 'knp-variants', role: 'group', 'aria-label': 'Work views' }, ['Backlog', 'Attention'].map((title, index) => command(title, () => update({ variant: index }), { key: title, 'aria-pressed': current.variant === index }))),
       node('label', { className: 'knp-field' }, 'Repository', node('select', { value: current.repo, onChange: event => {
         const repo = event.target.value;
         update({ repo, selected: current.items.find(item => item.repo === repo).id, query: '' });
       } }, availableRepos.map(repo => node('option', { key: repo.id, value: repo.id }, repo.name)))),
-      node('div', { className: 'knp-actions' }, command('New request', () => update({ creating: !current.creating }), { className: 'knp-outline' }), node('label', { className: 'knp-check' }, node('input', { type: 'checkbox', checked: current.showAfk, onChange: event => update({ showAfk: event.target.checked }) }), 'Show AFK')),
-      current.creating && node(NewRequest),
-      current.variant !== 2 && node('input', { className: 'knp-search', 'aria-label': 'Find sample work', placeholder: 'Find work...', value: current.query, onChange: event => update({ query: event.target.value }) }),
-      node('div', { className: 'knp-list' }, current.variant === 0 ? node(Backlog, { current }) : current.variant === 1 ? node(Attention, { current }) : node(Picker, { current })),
+      node('div', { className: 'knp-actions' }, command('New request', () => startRequest(), { className: 'knp-outline' }), node('label', { className: 'knp-check' }, node('input', { type: 'checkbox', checked: current.showAfk, onChange: event => update({ showAfk: event.target.checked }) }), 'Show AFK')),
+      node('input', { className: 'knp-search', 'aria-label': 'Find sample work', placeholder: 'Find work...', value: current.query, onChange: event => update({ query: event.target.value }) }),
+      node('div', { className: 'knp-list' }, current.variant === 0 ? node(Backlog, { current }) : node(Attention, { current })),
       node('div', { className: 'knp-footer' }, node('small', null, current.variant === 1 ? 'All assigned repositories' : 'Newest requests first'),
         node('label', null, 'Preview role', node('select', { value: current.role, onChange: event => update({ role: event.target.value, repo: 'atlas', selected: 'policy' }) }, node('option', { value: 'admin' }, 'Administrator'), node('option', { value: 'member' }, 'Member')))),
       current.notice && node('p', { role: 'status', className: 'knp-notice' }, current.notice));
@@ -118,6 +99,7 @@ function createNativeNavigationPrototype() {
     const current = usePrototype();
     React.useEffect(() => { void refreshModels(); }, []);
     const disabled = current.role !== 'admin';
+    if (disabled && (global || current.repo !== 'atlas')) return node('p', { className: 'knp-settings knp' }, 'Administrator access required');
     const scope = global ? 'global' : current.repo;
     const saved = global ? current.global : current.overrides[current.repo];
     const draft = disabled ? {} : current.settingsDrafts[scope] ?? {};
@@ -157,6 +139,11 @@ function createNativeNavigationPrototype() {
       else update({ settingsDrafts, overrides: { ...current.overrides, [current.repo]: overrides } });
     }
     return node('section', { className: 'knp-settings knp' }, node('h2', null, global ? 'Global defaults' : repos.find(repo => repo.id === current.repo).name + ' settings'), node('p', { className: 'knp-muted' }, 'Prototype / ' + (disabled ? 'Read-only' : 'Administrator')),
+      !global && node('label', { className: 'knp-field' }, 'Repository', node('select', { value: current.repo, onChange: event => {
+        const repo = event.target.value;
+        update({ repo, selected: current.items.find(item => item.repo === repo).id, query: '' });
+      } }, repos.filter(repo => !disabled || repo.id === 'atlas').map(repo => node('option', { key: repo.id, value: repo.id }, repo.name)))),
+      node('h3', null, 'New Session defaults'),
       modelRoles.map(key => node('div', { className: 'knp-setting', key }, node('label', null, key === 'qa' ? 'QA' : key[0].toUpperCase() + key.slice(1), node('select', { value: values[key], disabled: disabled || !catalogReady || models.length === 0, onChange: event => change(key, event.target.value) },
         node('option', { value: '', disabled: true }, !catalogReady ? 'Loading models...' : models.length === 0 ? 'No configured models available' : 'Choose model'),
         values[key] && !models.some(model => model.id === values[key]) && node('option', { value: values[key], disabled: true }, 'Unavailable model'),
@@ -233,21 +220,76 @@ function createNativeNavigationPrototype() {
   function People() {
     const current = usePrototype();
     const [inviting, setInviting] = React.useState(false);
+    const [confirming, setConfirming] = React.useState(null);
     if (current.role !== 'admin') return node('p', { className: 'knp-settings knp' }, 'Administrator access required');
     const person = current.people.find(user => user.id === current.person);
-    function change(patch) { update({ people: current.people.map(user => user.id === person.id ? { ...user, ...patch } : user) }); }
+    const assignments = current.peopleDrafts[person.id] ?? person.repos;
+    const dirty = Object.hasOwn(current.peopleDrafts, person.id);
+    function change(patch) {
+      if (state.role !== 'admin') return;
+      update({ people: state.people.map(user => user.id === person.id ? { ...user, ...patch } : user) });
+    }
+    function stageAssignments(next) {
+      const peopleDrafts = { ...current.peopleDrafts };
+      if (next.length === person.repos.length && next.every(id => person.repos.includes(id))) delete peopleDrafts[person.id];
+      else peopleDrafts[person.id] = next;
+      update({ peopleDrafts });
+    }
+    function finishAssignments(save) {
+      if (state.role !== 'admin' || !dirty) return;
+      const peopleDrafts = { ...current.peopleDrafts };
+      delete peopleDrafts[person.id];
+      update({ peopleDrafts, people: current.people.map(user => save && user.id === person.id ? { ...user, repos: assignments } : user) });
+    }
     return node('section', { className: 'knp-settings knp' }, node('div', { className: 'knp-actions' }, node('h2', null, 'Users'), !inviting && command('Invite user', () => setInviting(true), { className: 'knp-outline' })), node('p', { className: 'knp-muted' }, 'Prototype / sample accounts'),
       node('label', { className: 'knp-check' }, node('input', { type: 'checkbox', checked: current.emailFails, onChange: event => update({ emailFails: event.target.checked }) }), 'Simulate email failure'),
-      node('div', { className: 'knp-actions knp-user-list', role: 'group', 'aria-label': 'Sample users' }, current.people.map(user => command(user.name, () => { setInviting(false); update({ person: user.id }); }, { key: user.id, 'data-knp-user': user.id, 'aria-pressed': !inviting && user.id === person.id }))),
-      inviting ? node(InviteUser, { close: () => setInviting(false) }) : node('section', { className: 'knp-user', 'aria-label': 'User Details' }, node('h3', null, person.name), node('p', null, person.email), node('p', { role: 'status', className: 'knp-status', 'data-state': person.invited ? 'Ready' : 'Interrupted' }, person.invited ? 'Invitation sent / no first login' : 'Password-setup email failed'), command('Resend invitation', () => change({ invited: !state.emailFails }), { className: 'knp-outline' }),
-        node('h3', null, 'Repository assignments'), repos.map(repo => node('label', { className: 'knp-check', key: repo.id }, node('input', { type: 'checkbox', checked: person.repos.includes(repo.id), onChange: event => change({ repos: event.target.checked ? [...person.repos, repo.id] : person.repos.filter(id => id !== repo.id) }) }), repo.name))),
+      node('div', { className: 'knp-actions knp-user-list', role: 'group', 'aria-label': 'Sample users' }, current.people.map(user => command(user.name, () => { setInviting(false); setConfirming(null); update({ person: user.id }); }, { key: user.id, 'data-knp-user': user.id, 'aria-pressed': !inviting && user.id === person.id }))),
+      inviting ? node(InviteUser, { close: () => setInviting(false) }) : node('section', { className: 'knp-user', 'aria-label': 'User Details' }, node('h3', null, person.name), node('p', null, person.email), node('p', { role: 'status', className: 'knp-status', 'data-state': person.invited ? 'Ready' : 'Interrupted' }, person.invited ? 'Invitation sent / no first login' : 'Password-setup email failed'), command('Resend invitation', () => change({ invited: !state.emailFails }), { className: 'knp-outline', disabled: person.disabled === true }),
+        node('h3', null, 'Repository assignments'), repos.map(repo => node('label', { className: 'knp-check', key: repo.id }, node('input', { type: 'checkbox', checked: assignments.includes(repo.id), onChange: event => stageAssignments(event.target.checked ? [...assignments, repo.id] : assignments.filter(id => id !== repo.id)) }), repo.name)),
+        node('div', { className: 'knp-actions knp-save' }, command('Save changes', () => finishAssignments(true), { className: 'knp-outline', disabled: !dirty }), command('Discard', () => finishAssignments(false), { disabled: !dirty }), node('small', { role: 'status' }, dirty ? 'Unsaved changes' : 'Saved')),
+        node('h3', null, 'Account access'), node('p', { role: 'status' }, person.disabled ? 'Access disabled' : 'Access enabled'),
+        person.disabled ? command('Re-enable access', () => change({ disabled: false }), { className: 'knp-outline' }) : confirming === person.id
+          ? node('div', { role: 'group', 'aria-label': 'Disable access confirmation' }, node('p', null, 'Disable access for ' + person.name + '? Active access will be revoked; the account and history will remain.'), node('div', { className: 'knp-actions' }, command('Confirm disable access', () => { change({ disabled: true }); setConfirming(null); }, { className: 'knp-outline' }), command('Keep access', () => setConfirming(null))))
+          : command('Disable access', () => setConfirming(person.id), { className: 'knp-outline' })),
       node('small', null, 'No email is sent and no account is created.'));
+  }
+  function ConversationSample() {
+    return node('figure', { className: 'knp knp-presentation', 'aria-label': 'Conversation presentation sample' }, node('figcaption', null, 'Prototype sample'),
+      node('div', { className: 'knp-sample-response' }, node('p', null, 'Please keep invitations restricted to assigned repositories.'),
+        node('footer', { className: 'knp-sample-attribution' }, node('span', null, 'Minh Nguyen'), node('time', { dateTime: '2026-09-14T09:42:00+07:00' }, '14 Sep 2026, 09:42 (UTC+7)'))),
+      node('p', null, 'Application preview: ', node('a', { href: 'https://atlas-215.preview.example.test/', target: '_blank', rel: 'noopener noreferrer', title: 'Sample address; no preview server is running' }, 'Open preview')));
   }
   return {
     name: 'kishi-native-navigation-prototype',
     apply(ctx) {
       const slots = ctx.get('slots');
       if (!slots) throw new Error('Native DSH slots are unavailable');
+      const workspace = ctx.get('uiWorkspace');
+      startRequest = () => {
+        if (!workspace) { update({ notice: 'Native conversation is unavailable.' }); return; }
+        workspace.startSession();
+        update({ notice: '' });
+      };
+      slots.inject('settings.general.item', () => slots.register({ name: 'settings.general.item', id: 'language' }, () => null));
+      ctx.effect(() => {
+        let memberEffects = [];
+        const syncRole = current => {
+          if (current.role === 'member' && memberEffects.length === 0) memberEffects = [
+            ...['conversation.input.model', 'conversation.input.plan'].map(name => slots.inject(name, () => slots.register({ name }, () => null))),
+            ...['permission', 'transcript-view', 'composer-enter'].map(id => slots.inject('settings.general.item', () => slots.register({ name: 'settings.general.item', id }, () => null))),
+            ...[['models', 'Models'], ['plugins', 'Plugins'], ['agent-presets', 'Agent presets']].map(([id, label]) => slots.inject('settings.section', () => slots.register({ name: 'settings.section', id, label }, () => node('p', { className: 'knp-settings knp' }, 'Administrator access required')))),
+            slots.inject('settings.action', () => slots.register({ name: 'settings.action', id: 'open-document' }, () => null)),
+            slots.inject('sidebar.footer.action', () => slots.register({ name: 'sidebar.footer.action', id: 'cordis-panel' }, () => null)),
+          ];
+          if (current.role === 'admin' && memberEffects.length > 0) {
+            for (const dispose of memberEffects) dispose();
+            memberEffects = [];
+          }
+        };
+        listeners.push(syncRole);
+        syncRole(state);
+        return () => { listeners = listeners.filter(listener => listener !== syncRole); for (const dispose of memberEffects) dispose(); };
+      }, 'kishi-prototype.member-controls');
       ctx.effect(() => {
         let active = true;
         let generation = 0;
@@ -288,7 +330,7 @@ function createNativeNavigationPrototype() {
         .knp h3 { font-size: 13px; margin: 14px 0 8px; }
         .knp-browser { display: flex; flex-direction: column; min-height: 0; height: 100%; gap: 12px; padding: 8px 12px 12px; }
         .knp-heading { display: grid; gap: 3px; }
-        .knp-variants { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; padding: 2px; }
+        .knp-variants { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; padding: 2px; }
         .knp-variants button { padding: 5px 1px; font-size: 11px; }
         .knp-field,.knp-form label:not(.knp-check) { display: grid; gap: 5px; font-size: 12px; }
         .knp-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -330,14 +372,21 @@ function createNativeNavigationPrototype() {
         .knp-user { border-top: 1px solid var(--dsw-alias-border-l1); margin-top: 18px; padding-top: 10px; overflow-wrap: anywhere; }
         .knp-user p { margin: 10px 0; }
         .knp-user small { display: block; margin-top: 15px; }
+        .knp-presentation { margin: 0; padding: 12px 0; overflow-wrap: anywhere; }
+        .knp-presentation figcaption,.knp-sample-attribution { color: var(--dsw-alias-label-secondary); font-size: 11px; }
+        .knp-sample-response { padding: 14px 0; }
+        .knp-sample-response p { margin: 0 0 6px; font-size: 14px; line-height: 1.6; }
+        .knp-sample-attribution { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+        .knp-presentation a { color: var(--dsw-alias-brand-primary); }
         @media (max-width: 600px) { .knp-context { max-width: 110px; font-size: 11px; } }
       `), 'kishi-prototype.styles');
+      slots.inject('tool.view.cordis', () => slots.register({ name: 'tool.view.cordis', key: 'self' }, ConversationSample));
       slots.inject('sidebar.workspaces', () => slots.register({ name: 'sidebar.workspaces', priority: 1 }, BrowserRegion));
       slots.inject('conversation.session.header.utilities', () => slots.register({ name: 'conversation.session.header.utilities', id: 'kishi-sample-context', order: -20 }, WorkContext));
       slots.inject('settings.section', () => [
-        slots.register({ name: 'settings.section', id: 'kishi-global-prototype', label: 'Kishi global', order: 50 }, () => node(Settings, { global: true })),
-        slots.register({ name: 'settings.section', id: 'kishi-repository-prototype', label: 'Kishi repository', order: 51 }, () => node(Settings)),
-        slots.register({ name: 'settings.section', id: 'kishi-users-prototype', label: 'Kishi users', order: 52 }, People),
+        slots.register({ name: 'settings.section', id: 'kishi-global-prototype', label: 'Global', order: 50 }, () => node(Settings, { global: true })),
+        slots.register({ name: 'settings.section', id: 'kishi-repository-prototype', label: 'Repositories', order: 51 }, () => node(Settings)),
+        slots.register({ name: 'settings.section', id: 'kishi-users-prototype', label: 'Users', order: 52 }, People),
       ]);
     },
   };
