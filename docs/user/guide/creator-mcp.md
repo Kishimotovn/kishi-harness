@@ -59,7 +59,8 @@ These focused commands exercise the command adapter, MCP protocol, built DSH sta
 ```sh
 ./node_modules/.bin/vitest run packages/experimental/mcp-creator/tests/command.spec.ts packages/experimental/mcp-creator/tests/server.spec.ts
 ./node_modules/.bin/vitest run packages/experimental/mcp-creator/tests/browser-handoff.spec.ts
-DSH_EXAMPLE_MODE=lib ./node_modules/.bin/vitest run packages/experimental/mcp-creator/tests/profile.spec.ts
+./node_modules/.bin/vitest run packages/experimental/mcp-creator/tests --coverage --coverage.include='packages/experimental/mcp-creator/src/**/*.ts'
+DSH_EXAMPLE_MODE=lib ./node_modules/.bin/vitest run --config vitest.e2e.config.ts packages/experimental/mcp-creator/tests/profile.e2e.ts
 DSH_SNAPSHOT=replay ./node_modules/.bin/vitest run --config vitest.web.config.ts apps/web/tests/creator-mcp.e2e.ts
 ```
 

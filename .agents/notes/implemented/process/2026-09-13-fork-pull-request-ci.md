@@ -18,7 +18,7 @@ The [preview workflow](../../../../.github/workflows/build-preview-cloudflare.ym
 
 Archived projection-cache recovery waits for both automatic checkpoint writes before inspecting the replaced document. Their promises resolve after durability, so a rejected write fails directly instead of appearing as a stale-value polling timeout. The fixture retains real filesystem and format/title assertions and uses the lane's test budget rather than an independent five-second polling window. It does not request an extra checkpoint or alter runtime write policy.
 
-Agent Teams startup recovery can claim a queued message before the ordinary send path attempts delivery. The recovery fixture forces that ordering and verifies one persisted child message and one persisted delivery acknowledgement rather than requiring synchronous acceptance. Terminal startup output is a partial snapshot; the PowerShell check waits for its prompt in live scrollback instead of assuming the prompt shares the readiness-marker chunk.
+Agent Teams startup recovery can claim a queued message before the ordinary send path attempts delivery. Its receipt records only immediate delivery observation; recovery may still be running or may already have finished when the sender resumes. The recovery fixture verifies one persisted child message and one persisted delivery acknowledgement independently of that timing. Terminal startup output is a partial snapshot; the PowerShell check waits for its prompt in live scrollback instead of assuming the prompt shares the readiness-marker chunk.
 
 ## Alternatives considered
 

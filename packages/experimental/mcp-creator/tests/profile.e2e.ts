@@ -13,7 +13,7 @@ import { CREATOR_TOOLS } from '../src/command.ts'
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
 
-describe('creator MCP Web profile', () => {
+describe.skipIf(process.env.DSH_EXAMPLE_MODE !== 'lib')('creator MCP Web profile', { retry: 0 }, () => {
   it('discovers creator tools through the real dsh launcher without model requests', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-creator-profile-'))
     onTestFinished(async () => { await rm(home, { recursive: true, force: true }) })

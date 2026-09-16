@@ -1,9 +1,14 @@
-import { mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createBrowserHandoff } from '../src/browser-handoff.ts'
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const filesystem = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...filesystem, writeFile: vi.fn(filesystem.writeFile) }
+})
 
 describe('creator browser handoff', () => {
   it('keeps the token in a private file and removes that file on cleanup', async () => {
@@ -30,5 +35,16 @@ describe('creator browser handoff', () => {
     await symlink(workspace, join(workspace, '.cache'), 'junction')
     await expect(createBrowserHandoff('http://127.0.0.1:55945/?token=example-only-token', workspace))
       .rejects.toThrow('creator browser cache must be a real directory')
+  })
+
+  it('removes the private directory when writing the handoff fails', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'creator-handoff-write-test-'))
+    onTestFinished(async () => { await rm(workspace, { recursive: true, force: true }) })
+    const failure = new Error('handoff write failed')
+    vi.mocked(writeFile).mockRejectedValueOnce(failure)
+    onTestFinished(() => { vi.mocked(writeFile).mockReset() })
+
+    await expect(createBrowserHandoff('http://127.0.0.1:55945/?token=example-only-token', workspace)).rejects.toBe(failure)
+    expect(await readdir(join(workspace, '.cache'))).toEqual([])
   })
 })

@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import Commands from '@deepseek-ai/dsh-commands'
+import Commands, { CommandId, type CommandDefinition } from '@deepseek-ai/dsh-commands'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -20,6 +20,7 @@ describe('creator command', () => {
     const agent = { id: session.id, session } as Agent
     let calls = 0
     let nested: Promise<string> | undefined
+    let handler!: CommandDefinition['handler']
     await ctx.plugin({
       name: 'creator-command-test',
       inject: ['commands', 'tools'],
@@ -39,7 +40,10 @@ describe('creator command', () => {
           }
           return next()
         })
+        const registration = vi.spyOn(scope.ctx.commands, 'register')
         registerCreatorCommand(scope.ctx, agent)
+        handler = registration.mock.calls[0]![0].handler
+        registration.mockRestore()
       },
     })
 
@@ -53,6 +57,11 @@ describe('creator command', () => {
     expect(session.snapshotEvents().map(event => event.type)).toEqual(reenter
       ? ['command/run', 'command/run', 'command/done', 'command/done']
       : ['command/run', 'command/done'])
+    expect(await ctx.commands.execute({ ...agent }, '/creator-mcp {"name":"cordis_inspect_list","arguments":{}}', [], new AbortController().signal)).toBeUndefined()
+    await expect(handler({
+      agent: { ...agent }, commandId: CommandId('wrong-owner'), rawInput: '{}',
+      attachments: [], signal: new AbortController().signal,
+    })).rejects.toThrow('creator MCP command belongs to another Session')
     await expect(ctx.commands.execute(agent, '/creator-mcp {"name":"bash","arguments":{}}', [], new AbortController().signal)).rejects.toThrow('allowed tool name')
   })
 })

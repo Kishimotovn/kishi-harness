@@ -8,7 +8,7 @@ import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { CREATOR_TOOLS } from '../src/command.ts'
 import { createCreatorServer } from '../src/server.ts'
 
@@ -27,6 +27,7 @@ describe('creator MCP connection', () => {
     const queryStopped = Promise.withResolvers<undefined>()
     let endpoint!: ReturnType<typeof createCreatorServer>
     let removeOwner!: () => void
+    let removeTool!: () => void
     let definitions = 0
     await ctx.plugin({
       name: 'mcp-test-scope', inject: ['agents', 'commands', 'tools'],
@@ -36,20 +37,25 @@ describe('creator MCP connection', () => {
         scope.ctx.on('tools/pre-execute', (execution, next) => execution.name === 'cordis_define'
           ? Promise.resolve({ kind: 'deny', reason: 'permission declined' })
           : next())
-        for (const name of CREATOR_TOOLS) scope.ctx.tools.register(defineTool({
-          name, description: `Test ${name}`, parameters: {},
-          output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
-          execute: async (_args, execution) => {
-            if (name === 'cordis_define') definitions += 1
-            if (name !== 'cordis_inspect_query') return { ok: true }
-            queryStarted.resolve(undefined)
-            await new Promise<void>((resolve) => { execution.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
-            queryStopped.resolve(undefined)
-            execution.signal.throwIfAborted()
-            return {}
-          },
-        }))
-        endpoint = createCreatorServer(scope.ctx, agent, ending === 'timeout' ? 1000 : 60000)
+        for (const name of CREATOR_TOOLS) {
+          const unregister = scope.ctx.tools.register(defineTool({
+            name, description: `Test ${name}`, parameters: {},
+            output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+            execute: async (_args, execution) => {
+              if (name === 'cordis_define') definitions += 1
+              if (name !== 'cordis_inspect_query') return { ok: true }
+              queryStarted.resolve(undefined)
+              await new Promise<void>((resolve) => { execution.signal.addEventListener('abort', () => { resolve() }, { once: true }) })
+              queryStopped.resolve(undefined)
+              execution.signal.throwIfAborted()
+              return {}
+            },
+          }))
+          if (name === 'cordis_undefine') removeTool = unregister
+        }
+        endpoint = createCreatorServer(scope.ctx, agent, ending === 'timeout' ? 1000 : 60000,
+          ending === 'timeout' ? 'http://127.0.0.1:55945/' : undefined,
+          ending === 'timeout' ? 'file:///creator-test/sign-in.html' : undefined)
       },
     })
     onTestFinished(async () => { await endpoint.close() })
@@ -58,6 +64,9 @@ describe('creator MCP connection', () => {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
     await endpoint.server.connect(serverTransport)
     await client.connect(clientTransport)
+    expect(client.getInstructions()?.includes('Native DSH UI:')).toBe(ending === 'timeout')
+    expect(client.getInstructions()?.includes('Browser sign-in file:')).toBe(ending === 'timeout')
+    ctx.emit('agent/disposed', { agent: { ...agent, id: SessionId('another-owner') } })
     const list = await client.listTools()
     expect(list.tools.map(tool => tool.name)).toEqual(CREATOR_TOOLS)
     expect(list.tools[0]?.inputSchema).toEqual(ctx.tools.schemas(agent)[0]?.parameters)
@@ -66,6 +75,17 @@ describe('creator MCP connection', () => {
     await expect(client.callTool({ name: 'bash', arguments: {} })).rejects.toThrow('not exposed')
     expect(await client.callTool({ name: 'cordis_define', arguments: {} })).toMatchObject({ isError: true })
     expect(definitions).toBe(0)
+    const execute = vi.spyOn(ctx.commands, 'execute')
+    onTestFinished(() => { execute.mockRestore() })
+    execute.mockResolvedValueOnce(undefined)
+    expect(await client.callTool({ name: 'cordis_inspect_list' })).toMatchObject({
+      isError: true, content: [{ type: 'text', text: 'creator command is unavailable' }],
+    })
+    execute.mockRejectedValueOnce('command failed')
+    expect(await client.callTool({ name: 'cordis_inspect_list' })).toMatchObject({
+      isError: true, content: [{ type: 'text', text: 'command failed' }],
+    })
+    execute.mockRestore()
     const cancellation = new AbortController()
     const waiting = client.callTool({ name: 'cordis_inspect_query' }, CallToolResultSchema, { signal: cancellation.signal })
     if (ending === 'cancellation') {
@@ -78,7 +98,10 @@ describe('creator MCP connection', () => {
     } else {
       expect(await waiting).toMatchObject({ isError: true })
     }
-    removeOwner()
+    removeTool()
+    await expect(client.listTools()).rejects.toThrow('all required creator tools')
+    if (ending === 'cancellation') ctx.emit('agent/disposed', { agent })
+    else removeOwner()
     await expect(client.listTools()).rejects.toThrow('Session is unavailable')
     await endpoint.close()
     expect(session.snapshotEvents().filter(event => event.type === 'command/done').at(-1)?.data).toMatchObject({ kind: 'error' })
