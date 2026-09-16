@@ -36,10 +36,11 @@ export function registerCreatorCommand(ctx: Context, owner: Agent): {
         || request.arguments === null || Array.isArray(request.arguments)) {
         throw new Error('creator MCP command requires an allowed tool name and an arguments object')
       }
-      const execution = ctx.tools.execute({
+      const { name, arguments: toolArguments } = request
+      const execution = Promise.resolve().then(() => ctx.tools.execute({
         agent, signal, callId: ToolCallId(String(commandId)),
-        name: request.name, arguments: request.arguments,
-      })
+        name, arguments: toolArguments,
+      }))
       pending = execution
       try {
         const result = await execution

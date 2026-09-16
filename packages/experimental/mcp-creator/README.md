@@ -30,13 +30,13 @@ Follow the [VS Code creator setup guide](../../../docs/user/guide/creator-mcp.md
 | `sessionId` | Required | Identity of the new creator Session; an existing live identity is not adopted |
 | `callTimeoutMs` | `60000` | Tool-call deadline in milliseconds, including Client inspection waits; integer from 1 to 2147483647 |
 
-The supplied overlay creates a fresh Session identity for each process. The native browser lists it as **VS Code Creator**, and MCP initialization names its exact identity and local Web URL. Client queries require a responding DSH page. A missing or disposed Session rejects calls; the connection never selects a different live Session.
+The supplied overlay creates a fresh Session identity for each process. MCP initialization names its exact identity and local Web URL. The native sidebar hides blank Sessions; select **New session** to open a responding Client page. The browser's displayed Session does not retarget the MCP connection. A missing or disposed creator Session rejects calls; the connection never selects a different live Session.
 
 MCP initialization also advertises a local browser sign-in file for browsers that do not share the default browser's cookie. Open that file in the browser, then navigate directly to the clean Web URL. Its redirect uses the existing DSH token exchange; `HttpOnly` and `SameSite=Strict` remain enabled. The launch token stays inside the temporary file, never in tool results. On POSIX the containing directory is mode `0700` and the file is `0600`; normal bridge shutdown removes both. Do not read, print, or share the file's contents.
 
 The MCP roster contains `cordis_inspect_list`, `cordis_inspect_query`, `cordis_inspect_self`, `cordis_define`, `cordis_run`, `cordis_stop`, and `cordis_undefine`. Discovery copies their live descriptions and input schemas. Responses preserve the DSH content and error result; `structuredContent` contains the canonical result, including its `value` when available. An `awaiting-approval` or `starting` result is not a completed activation.
 
-One call may run at a time. MCP cancellation, the configured deadline, connection closure, and Session disposal cancel the current call. The bridge waits for tool execution to settle before accepting another call or finishing shutdown. A tool or middleware that ignores cancellation can delay settlement.
+One call may run at a time, including calls reentered from tool middleware. MCP cancellation, the configured deadline, connection closure, and Session disposal cancel the current call. The bridge waits for tool execution to settle before accepting another call or finishing shutdown. A tool or middleware that ignores cancellation can delay settlement.
 
 -----
 

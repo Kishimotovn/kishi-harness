@@ -9,7 +9,7 @@ import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import { registerCreatorCommand } from '../src/command.ts'
 
 describe('creator command', () => {
-  it('uses tool middleware and paired command events without a model turn', async () => {
+  it.each([false, true])('uses tool middleware and paired command events without a model turn (reentry: %s)', async (reenter) => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     await ctx.plugin(SessionStore)
@@ -19,6 +19,7 @@ describe('creator command', () => {
     const session = ctx.sessions.create(SessionId('creator-mcp-test'))
     const agent = { id: session.id, session } as Agent
     let calls = 0
+    let nested: Promise<string> | undefined
     await ctx.plugin({
       name: 'creator-command-test',
       inject: ['commands', 'tools'],
@@ -32,6 +33,10 @@ describe('creator command', () => {
         scope.ctx.on('tools/pre-execute', (execution, next) => {
           expect(execution.agent).toBe(agent)
           calls += 1
+          if (reenter && calls === 1) {
+            nested = scope.ctx.commands.execute(agent, '/creator-mcp {"name":"cordis_inspect_list","arguments":{}}', [], execution.signal)
+              .then(() => 'accepted', (error: unknown) => error instanceof Error ? error.message : String(error))
+          }
           return next()
         })
         registerCreatorCommand(scope.ctx, agent)
@@ -43,8 +48,11 @@ describe('creator command', () => {
     expect(result?.result.kind).toBe('success')
     const recorded: unknown = JSON.parse(result!.result.text!)
     expect(recorded).toMatchObject({ content: [{ type: 'text', text: '{"providers":["test"]}' }] })
+    if (reenter) expect(await nested).toBe('a creator tool call is already running in this Session')
     expect(calls).toBe(1)
-    expect(session.snapshotEvents().map(event => event.type)).toEqual(['command/run', 'command/done'])
+    expect(session.snapshotEvents().map(event => event.type)).toEqual(reenter
+      ? ['command/run', 'command/run', 'command/done', 'command/done']
+      : ['command/run', 'command/done'])
     await expect(ctx.commands.execute(agent, '/creator-mcp {"name":"bash","arguments":{}}', [], new AbortController().signal)).rejects.toThrow('allowed tool name')
   })
 })

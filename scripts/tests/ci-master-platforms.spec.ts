@@ -62,7 +62,7 @@ describe('master-only platform scheduling', () => {
       expect(evaluateCondition(condition, true, results)).toBe(false)
       expect(evaluateCondition(condition, false, results, 'push')).toBe(false)
       const failureStep = aggregate.steps!.find(step => step.name === 'Fail if any needed job did not succeed')!
-      expect(evaluateCondition(failureStep.if!, false, results)).toBe(result !== 'success')
+      expect(failureStep.if).toBeUndefined()
       expect(failureStep.run).toContain('exit 1')
     },
   )
@@ -72,14 +72,19 @@ describe('master-only platform scheduling', () => {
     expect(evaluateCondition(workflow('ci.yml').jobs['all-checks-passed']!.if as string, true, ['success'])).toBe(false)
   })
 
-  it('keeps only Linux and Windows x64 runtimes in required PR CI', () => {
+  it.each([
+    ['deepseek-ai/deepseek-harness', 'node24-linux-x64,node24-win-x64'],
+    ['Kishimotovn/kishi-harness', 'node24-linux-x64,node24-macos-arm64,node24-macos-x64'],
+  ])('selects required PR runtime targets for %s', (repository, targets) => {
     const pr = workflow('ci.yml')
     expect(Object.keys(pr.on)).toEqual(['pull_request'])
     expect(pr.jobs['python-runtime']).toMatchObject({
       if: "github.event_name == 'pull_request'",
       uses: runtimeBuilder,
-      with: { ci: true, targets: 'node24-linux-x64,node24-win-x64' },
+      with: { ci: true },
     })
+    const expression = String(pr.jobs['python-runtime']!.with!.targets).trim().slice(3, -2)
+    expect(runInNewContext(expression, { github: { repository } }, { timeout: 1000 })).toBe(targets)
     expect(pr.jobs.windows).toBeUndefined()
     expect(JSON.stringify(pr.jobs)).not.toMatch(/wine-windows-gates|check:windows-wine/)
     const aggregate = pr.jobs['all-checks-passed']!
@@ -88,7 +93,7 @@ describe('master-only platform scheduling', () => {
     expect(aggregate.needs!.every(id => id in pr.jobs)).toBe(true)
     expect(aggregate.if).toBe("${{ !cancelled() && github.event_name == 'pull_request' }}")
     expect(aggregate.steps).toContainEqual(expect.objectContaining({
-      if: "contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')",
+      name: 'Fail if any needed job did not succeed', env: { NEEDS_JSON: '${{ toJSON(needs) }}' },
     }))
   })
 
@@ -118,10 +123,15 @@ describe('master-only platform scheduling', () => {
     expect(preflight.run).toContain('exit 1')
   })
 
-  it('runs Wine once on hosted master CI and seeds its own apt cache', () => {
+  it('retains Wine only on upstream hosted master CI with its own apt cache', () => {
     const master = workflow('ci-master.yml')
     const wine = master.jobs.windows!
-    expect(wine).toMatchObject({ if: masterPush, 'runs-on': 'ubuntu-latest' })
+    expect(wine).toMatchObject({ if: masterPush + " && github.repository == 'deepseek-ai/deepseek-harness'", 'runs-on': 'ubuntu-latest' })
+    for (const repository of ['deepseek-ai/deepseek-harness', 'Kishimotovn/kishi-harness']) {
+      expect(runInNewContext(String(wine.if), {
+        github: { repository, event_name: 'push', ref: 'refs/heads/master' },
+      }, { timeout: 1000 })).toBe(repository === 'deepseek-ai/deepseek-harness')
+    }
     expect(wine.needs).toBeUndefined()
     expect(wine['continue-on-error']).toBeUndefined()
     expect(master.jobs['wine-apt-cache']).toBeUndefined()

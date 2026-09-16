@@ -30,7 +30,7 @@ The installation links the package and activates its [bundle layer](../../../pac
 
 The workspace [MCP configuration](../../../.vscode/mcp.json) defines `dshCreator`. In **MCP: List Servers**, start that server and review its trust prompt. The configuration uses `node` from the editor's environment; if Node is not available there, set `command` to your Node executable's absolute path.
 
-The server launches the supported `dsh --profile web` application with the installed creator bundle, chooses a free loopback port, and opens the native Web UI. The launch token is passed to the browser without printing it. In that UI, open **VS Code Creator**. MCP initialization and the server log show the clean local URL and Session identity.
+The server launches the supported `dsh --profile web` application with the installed creator bundle, chooses a free loopback port, and opens the native Web UI. The launch token is passed to the browser without printing it. Select **New session** if the composer is not already visible; the native history hides the blank creator Session. MCP remains bound to its advertised creator Session regardless of which conversation the browser displays. MCP initialization and the server log show the clean local URL and Session identity.
 
 Use the chat tool picker to enable the discovered creator tools. If this chat still lacks them, confirm the server is running and start a new chat turn after discovery. The checked-in configuration alone does not mean the tools are enabled in a particular editor session.
 
