@@ -8,15 +8,17 @@ Fork pull requests cannot validate code when their default runner labels name un
 
 ## Decision
 
-The primary Linux and native Windows jobs in [PR CI](../../../../.github/workflows/ci.yml) default to `ubuntu-24.04` and `windows-2025` outside `deepseek-ai/deepseek-harness`. Upstream retains its named larger runners. The existing [failover switches](2026-07-26-ci-failover-runbook.md) remain explicit operator selections, including their matching browser-install and cache behavior; a fork with no private runner pools leaves them unset.
+The primary Linux jobs in [PR CI](../../../../.github/workflows/ci.yml) default to `ubuntu-24.04` outside `deepseek-ai/deepseek-harness`. Upstream retains its named larger runners. The [fork platform policy](2026-09-16-fork-linux-macos-ci.md) owns Linux/macOS runtime targets and upstream-only Windows scheduling. The existing [failover switches](2026-07-26-ci-failover-runbook.md) remain explicit operator selections, including their matching browser-install and cache behavior; a fork with no private runner pools leaves them unset.
 
-Fork jobs use lower parallelism through the existing environment settings. Instrumented coverage uses two partitions without overlapping the exempt-heavy gate. Session replay concurrency is two and browser replay uses the existing serial mode. Test inventories, coverage thresholds, workflow timeout settings, native Windows execution, fail-fast behavior, and the blocking aggregate remain intact.
+Fork Linux jobs use lower parallelism through the existing environment settings. Instrumented coverage uses two partitions without overlapping the exempt-heavy gate. Session replay concurrency is two and browser replay uses the existing serial mode. Supported-platform test inventories, coverage thresholds, workflow timeout settings, and fail-fast behavior remain intact; the platform policy defines the aggregate's deliberate Windows skips.
 
 [Issue policy](../../../../.github/workflows/issue-policy.yml) and [Issue lifecycle](../../../../.github/workflows/issue-lifecycle.yml) run only in the upstream repository. Their App installation and Project configuration belong to upstream. This condition does not change branch protection or the independent weighted-review check. The [review-event policy](2026-08-10-event-directed-pr-review-status.md) remains authoritative for upstream Project transitions.
 
 The [preview workflow](../../../../.github/workflows/build-preview-cloudflare.yml) builds the workspace and preview image in forks. Cloudflare upload, protected-URL verification, and URL comments run only upstream. The [preview runner sizing decision](2026-09-06-preview-hosted-runner-sizing.md) remains independent and active. A successful fork preview job proves a build, not a deployment.
 
 Archived projection-cache recovery waits for both automatic checkpoint writes before inspecting the replaced document. Their promises resolve after durability, so a rejected write fails directly instead of appearing as a stale-value polling timeout. The fixture retains real filesystem and format/title assertions and uses the lane's test budget rather than an independent five-second polling window. It does not request an extra checkpoint or alter runtime write policy.
+
+Agent Teams startup recovery can claim a queued message before the ordinary send path attempts delivery. The recovery fixture forces that ordering and verifies one persisted child message and one persisted delivery acknowledgement rather than requiring synchronous acceptance. Terminal startup output is a partial snapshot; the PowerShell check waits for its prompt in live scrollback instead of assuming the prompt shares the readiness-marker chunk.
 
 ## Alternatives considered
 
@@ -30,10 +32,10 @@ Archived projection-cache recovery waits for both automatic checkpoint writes be
 
 ## Consequences
 
-Fork pull requests need no upstream App or Cloudflare credentials for these workflows. Upstream-only jobs are explicitly skipped, not treated as evidence that the integration works. Enabling a fork deployment or Project policy requires its own reviewed configuration. Master-push standbys and release publication are outside this PR-validation decision.
+Fork pull requests need no upstream App or Cloudflare credentials for these workflows. Upstream-only jobs are explicitly skipped, not treated as evidence that the integration works. Enabling a fork deployment or Project policy requires its own reviewed configuration. The fork platform policy owns post-merge runner scoping; release publication remains outside this decision.
 
 ## Verification
 
-[Workflow tests](../../../../scripts/ci-workflow.spec.ts) pin hosted fallbacks, explicit failover, fork parallelism, retained code checks, and Project job scoping. [Gate-construction tests](../../../../scripts/run-gates.spec.ts) verify the fork serial and upstream parallel browser modes. [Preview tests](../../../../scripts/preview-workflow.spec.ts) keep the build enabled and require all three deployment side effects to be upstream-only. The runner and concurrency assertions reject their pre-fix values. Hosted allocation and the complete Linux/Windows runs remain GitHub Actions evidence; local workflow assertions do not establish those outcomes.
+[Workflow tests](../../../../scripts/ci-workflow.spec.ts) pin hosted fallbacks, explicit failover, fork parallelism, retained code checks, and Project job scoping. [Gate-construction tests](../../../../scripts/run-gates.spec.ts) verify the fork serial and upstream parallel browser modes. [Preview tests](../../../../scripts/preview-workflow.spec.ts) keep the build enabled and require all three deployment side effects to be upstream-only. The runner and concurrency assertions reject their pre-fix values. Hosted allocation and platform execution remain GitHub Actions evidence; local workflow assertions do not establish those outcomes.
 
-The [archived-cache fixtures](../../../../packages/session/session-projection-cache/tests/fixtures.spec.ts) observe the real creation and turn-end writes without replacing their implementations. Removing the turn-end trigger fails the recovery check; restoration passes. The package tests retain full scoped source coverage. Native Windows CI owns the platform-specific confirmation.
+The [archived-cache fixtures](../../../../packages/session/session-projection-cache/tests/fixtures.spec.ts) observe the real creation and turn-end writes without replacing their implementations. Removing the turn-end trigger fails the recovery check; restoration passes. The package tests retain full scoped source coverage. Upstream Windows CI owns Windows-specific confirmation.
