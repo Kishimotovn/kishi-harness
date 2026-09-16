@@ -27,7 +27,7 @@ export function createCreatorServer(ctx: Context, owner: Agent, timeoutMs: numbe
   let pending: Promise<CallToolResult> | undefined
   // oxlint-disable-next-line typescript/no-deprecated -- preserve live DSH schemas without conversion to another validator.
   const server = new Server(
-    { name: 'dsh-creator', version: '0.1.5-rc.2' },
+    { name: 'dsh-creator', version: '0.1.6-alpha.1' },
     {
       capabilities: { tools: {} },
       instructions: `Creator tools are bound to DSH Session ${owner.id}. ${webUrl === undefined ? '' : `Native DSH UI: ${webUrl}. `}`
