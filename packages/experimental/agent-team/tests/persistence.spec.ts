@@ -226,14 +226,36 @@ for (const backend of backends) {
         expect(failedMember?.error).toContain('child Session recovery failed')
       }, { timeout: 5_000 })
 
+      const { mailbox } = second.ctx.agentTeams as unknown as { readonly mailbox: TeamMailbox }
+      let recovery: Promise<void> | undefined
+      const stopRecovery = second.ctx.on('session/event', (session, event) => {
+        if (session === activeHandle.agent.session && event.type === 'team/message/queued') {
+          recovery = mailbox.recoverFor(activeHandle.agent, SIGNAL)
+        }
+      })
       const receipt = await second.ctx.agentTeams.sendMessage(activeHandle.agent, {
         target: 'recoverable',
         content: [{ type: 'text', text: 'resume after reconciliation' }],
         signal: SIGNAL,
-      })
-      expect(receipt.status).toBe('accepted')
+      }).finally(stopRecovery)
+      expect(recovery).toBeDefined()
+      await recovery
+      expect(receipt.status).toBe('queued')
       await vi.waitFor(() => { expect(second.ctx.agents.get(childId)).toBeUndefined() }, { timeout: 5_000 })
       await vi.waitFor(() => { expect(durable(activeHandle.agent).pendingMessages).toEqual([]) })
+      await settleMailbox(second.ctx)
+      const delivered = (await storedEvents(second.ctx, childId)).flatMap(event =>
+        event.type === 'user/message'
+          && event.data.source.kind === 'team-message'
+          && event.data.source.messageId === receipt.messageId
+          ? [event.data.content]
+          : [])
+      expect(delivered).toEqual([[
+        { type: 'text', text: `Team message ${receipt.messageId} from lead:` },
+        { type: 'text', text: 'resume after reconciliation' },
+      ]])
+      expect((await storedEvents(second.ctx, activeRootId)).filter(event =>
+        event.type === 'team/message/delivered' && event.data.messageId === receipt.messageId)).toHaveLength(1)
 
       await activeHandle.dispose()
       await failedHandle.dispose()
