@@ -14,6 +14,8 @@ The [upstream bilingual decision](2026-07-02-bilingual-docs-and-pairing-gate.md)
 
 Documentation checks select maintained English files. Pairing checks honor the same setting in local commands and CI, and commit checks read its staged bytes. Pairing writes are refused in English-only mode, including automatic catalog re-recording. The website selects English pages from the unchanged bilingual publication manifest and preserves the `/en/` URLs.
 
+The [module-graph generator](../../../../scripts/gen-module-graph.ts) writes and checks only the English graph in English-only mode. Existing Chinese graph and pairing files remain untouched. Bilingual mode still generates and checks both documents and their recovery record.
+
 ## Alternatives considered
 
 **Delete the Chinese documentation.** Upstream edits would create recurring modify/delete conflicts and remove useful upstream material. Preserving files avoids that conflict source without promising current Kishi translations.
@@ -31,3 +33,5 @@ The fork maintains a small integration patch and must check new upstream documen
 ## Verification
 
 [Policy tests](../../../../scripts/doc-policy.spec.ts) cover defaults, invalid settings, staged-policy selection, retained Chinese files, and rejection of broken English links. [Catalog tests](../../../../scripts/gen-cordis-catalog-record.spec.ts) protect upstream pairing records. [Website tests](../../../../scripts/project-doc-site.spec.ts) cover both publication modes, the English root redirect, raw Markdown, and the English-only index. The standard documentation checks and website build remain required.
+
+[Package-graph tests](../../../../scripts/package-graph.spec.ts) check bilingual defaults and idempotent English-only writes that preserve the upstream graph records. `pnpm run verify-module-graph` rejects stale maintained output.

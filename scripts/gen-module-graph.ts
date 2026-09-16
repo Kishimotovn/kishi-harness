@@ -1,7 +1,8 @@
-/** Generate the paired shared-instance package graph from workspace peer dependencies. */
+/** Generate the maintained shared-instance package graph from workspace peer dependencies. */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { englishOnlyDocs } from './doc-policy.ts'
 import {
   collectPackageGraph,
   escapeMermaidLabel as escLabel,
@@ -110,20 +111,19 @@ export function renderModuleGraph(pkgs: readonly Pkg[], locale: Locale): string 
 }
 
 /**
- * Compute both localized graph documents from the current workspace manifests.
+ * Compute maintained graph documents from the current workspace manifests.
  * @param scanRoot - Repository root containing packages and documentation.
  * @returns Repository-relative output paths and exact generated content.
  */
 export function computeModuleGraphOutputs(scanRoot: string = root): ReadonlyMap<string, string> {
   const packages = collectPackageGraph(scanRoot, GROUP_ORDER, 'gen-module-graph')
-  return new Map([
-    [PATHS.source, renderModuleGraph(packages, 'en')],
-    [PATHS.zh, renderModuleGraph(packages, 'zh')],
-  ])
+  const outputs = new Map([[PATHS.source, renderModuleGraph(packages, 'en')]])
+  if (!englishOnlyDocs(scanRoot)) outputs.set(PATHS.zh, renderModuleGraph(packages, 'zh'))
+  return outputs
 }
 
 /**
- * Write both graph documents and their recovery record.
+ * Write maintained graph documents and the recovery record in bilingual mode.
  * @param scanRoot - Repository root containing packages and documentation.
  * @returns Repository-relative paths whose content changed.
  */
@@ -136,6 +136,7 @@ export function writeModuleGraph(scanRoot: string = root): string[] {
     writeFileSync(destination, content)
     changed.push(path)
   }
+  if (englishOnlyDocs(scanRoot)) return changed.sort()
   const source = Buffer.from(outputs.get(PATHS.source) ?? '')
   const zh = Buffer.from(outputs.get(PATHS.zh) ?? '')
   const record = renderTranslationPairingRecord(PATHS, {
@@ -150,14 +151,16 @@ export function writeModuleGraph(scanRoot: string = root): string[] {
   return changed.sort()
 }
 
-/** CLI entry: regenerate by default, or verify all paired outputs with `--check`. @returns Nothing. */
+/** CLI entry: regenerate by default, or verify maintained outputs with `--check`. @returns Nothing. */
 export function main(): void {
   const outputs = computeModuleGraphOutputs(root)
-  const record = renderTranslationPairingRecord(PATHS, {
-    sourceHash: gitBlobHash(Buffer.from(outputs.get(PATHS.source) ?? '')),
-    zhHash: gitBlobHash(Buffer.from(outputs.get(PATHS.zh) ?? '')),
-  })
-  const expected = new Map([...outputs, [PATHS.meta, record]])
+  const expected = new Map(outputs)
+  if (!englishOnlyDocs(root)) {
+    expected.set(PATHS.meta, renderTranslationPairingRecord(PATHS, {
+      sourceHash: gitBlobHash(Buffer.from(outputs.get(PATHS.source) ?? '')),
+      zhHash: gitBlobHash(Buffer.from(outputs.get(PATHS.zh) ?? '')),
+    }))
+  }
   if (process.argv.includes('--check')) {
     const stale = [...expected].filter(([path, content]) => (
       !existsSync(resolve(root, path)) || readFileSync(resolve(root, path), 'utf8') !== content
