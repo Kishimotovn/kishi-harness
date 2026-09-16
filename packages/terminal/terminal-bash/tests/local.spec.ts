@@ -330,7 +330,8 @@ describe.skipIf(!hasPwsh)('terminal-bash pwsh real shell', () => {
         timeoutMs: 8_000,
       }, 'pwsh')
       const created = await ctx.terminals.spawn(agent, { type: 'shell', name: 'main', cwd: root })
-      expect(created.motd).toContain('dsh> ')
+      const read = () => ctx.terminals.read(agent, created.sessionId, { offset: 0, count: 100 }).text
+      await expect.poll(read, { timeout: 8_000 }).toContain('dsh> ')
 
       const releaseFile = join(root, 'release-command')
       // Hold the command across the silence settlement without relying on host load.
@@ -356,7 +357,6 @@ describe.skipIf(!hasPwsh)('terminal-bash pwsh real shell', () => {
 
       // A silence-settled send stops collecting output; scrollback still receives
       // the command's later output. Only the child can produce this formatted token.
-      const read = () => ctx.terminals.read(agent, created.sessionId, { offset: 0, count: 100 }).text
       await expect.poll(read, { timeout: 8_000 }).toContain(expected)
       expect(read()).not.toContain('must-not-leak')
       expect(await ctx.terminals.kill(agent, created.sessionId)).toBe(true)

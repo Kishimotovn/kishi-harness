@@ -136,6 +136,14 @@ function withEnv<T>(name: string, value: string | undefined, action: () => T): T
 
 describe('gate graph validation', () => {
   it.each([
+    ['', 'test:web:built'],
+    ['6', 'test:web:ci'],
+  ])('constructs consumer gates with %j browser workers', (workers, script) => {
+    const subject = withPnpmEntrypoint(() => withEnv('DSH_WEB_SNAPSHOT_WORKERS', workers, () => gatesForMode('ci-consumers')))
+    expect(subject.find(candidate => candidate.id === 'web-snapshot')?.args).toContain(script)
+  })
+
+  it.each([
     'ci-primary',
     'ci-linux-primary',
     'ci-static',
