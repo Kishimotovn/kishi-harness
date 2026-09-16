@@ -1,6 +1,6 @@
 # Documentation maintenance
 
-Kishi maintains English documentation only when [scripts/doc-policy.json](../../scripts/doc-policy.json) sets `englishOnly` to `true`. This policy overrides translation requirements in upstream documentation and agent skills. All other documentation standards remain in force.
+Kishi maintains English documentation only when [scripts/doc-policy.json](../../scripts/doc-policy.json) sets `englishOnly` to `true`. This policy overrides translation and local documentation-check requirements in upstream documentation and agent skills. All other documentation standards remain in force.
 
 ## Authoring
 
@@ -11,7 +11,11 @@ Kishi maintains English documentation only when [scripts/doc-policy.json](../../
 
 ## Verification
 
-Use `pnpm run test:docs` while editing and `pnpm run doc-sync` plus `pnpm run lint` for the completed change. English links, code examples, copied types, diagrams, README requirements, and generated catalogs remain checked. Chinese files are excluded from source documentation checks.
+CI owns repository-wide documentation checks and full lint in this fork. Run `pnpm run test:docs`, `pnpm run doc-sync`, `pnpm run lint`, or their documentation validators locally only when the user explicitly requests them, including for CI failure diagnosis. Local edits, task completion, commits, pushes, and PR preparation do not trigger these commands. This overrides local verification requirements in upstream instructions and skills, including [dsh-doc](../../.agents/skills/dsh-doc/SKILL.md#workflow) and [dsh-pre-push-checks](../../.agents/skills/dsh-pre-push-checks/SKILL.md#select-relevant-evidence).
+
+Keep documentation current and leave CI workflows and normal Git hooks enabled. Focused behavior tests, editor diagnostics, and whitespace checks remain local. Report CI validation as pending until its results are available.
+
+English links, code examples, copied types, diagrams, README requirements, and generated catalogs remain checked in CI. Chinese files are excluded from source documentation checks.
 
 The pairing command reports the English-only opt-out. Its `--write` operation refuses to reconfirm translations. Commit-time `--cached` checks read the policy from the Git index, not unstaged changes. Catalog generation leaves Chinese files and pairing records unchanged.
 
