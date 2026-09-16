@@ -26,7 +26,7 @@ describe('creator MCP connection', () => {
     const queryStarted = Promise.withResolvers<undefined>()
     const queryStopped = Promise.withResolvers<undefined>()
     let endpoint!: ReturnType<typeof createCreatorServer>
-    let removeOwner!: () => void
+    let removeOwner!: ReturnType<Agents['register']>
     let removeTool!: () => void
     let definitions = 0
     await ctx.plugin({
@@ -101,7 +101,7 @@ describe('creator MCP connection', () => {
     removeTool()
     await expect(client.listTools()).rejects.toThrow('all required creator tools')
     if (ending === 'cancellation') ctx.emit('agent/disposed', { agent })
-    else removeOwner()
+    else await removeOwner()
     await expect(client.listTools()).rejects.toThrow('Session is unavailable')
     await endpoint.close()
     expect(session.snapshotEvents().filter(event => event.type === 'command/done').at(-1)?.data).toMatchObject({ kind: 'error' })
