@@ -16,7 +16,7 @@ The required aggregate accepts `skipped` only for the two upstream-only Windows 
 
 Repository conditions and caller target selections are the fork-specific changes. Keep upstream job bodies instead of maintaining copies or deleting Windows packages. After an upstream merge, the workflow regressions must still distinguish upstream and fork scheduling and reject missing required results.
 
-This is the platform exception to the [fork runner policy](2026-09-13-fork-pull-request-ci.md) and [upstream master-only platform schedule](2026-09-06-master-only-platform-ci.md). Their infrastructure ownership, artifact provenance, and failover decisions remain useful and active.
+This is the platform exception to the [fork runner policy](2026-09-13-fork-pull-request-ci.md) and [upstream master-only platform schedule](2026-09-06-master-only-platform-ci.md). Their infrastructure ownership, artifact source records, and failover decisions remain useful and active.
 
 ## Alternatives considered
 
