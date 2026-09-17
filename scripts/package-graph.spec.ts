@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { renderModuleGraph } from './gen-module-graph.ts'
+import { computeModuleGraphOutputs, renderModuleGraph, writeModuleGraph } from './gen-module-graph.ts'
 import { collectPackageGraph } from './package-graph.ts'
 
 const roots: string[] = []
@@ -52,6 +52,31 @@ describe('collectPackageGraph', () => {
 })
 
 describe('renderModuleGraph', () => {
+  it.each([undefined, false])('retains bilingual outputs when englishOnly is %s', (englishOnly) => {
+    const root = fixture({ provider: [] })
+    if (englishOnly !== undefined) {
+      mkdirSync(join(root, 'scripts'))
+      writeFileSync(join(root, 'scripts/doc-policy.json'), JSON.stringify({ englishOnly }))
+    }
+    expect([...computeModuleGraphOutputs(root).keys()]).toEqual(['docs/module-graph.md', 'docs/module-graph.zh.md'])
+  })
+
+  it('preserves upstream graph records in English-only mode', () => {
+    const root = fixture({ consumer: ['provider'], provider: [] })
+    mkdirSync(join(root, 'docs'))
+    mkdirSync(join(root, 'scripts'))
+    writeFileSync(join(root, 'scripts/doc-policy.json'), JSON.stringify({ englishOnly: true }))
+    writeFileSync(join(root, 'docs/module-graph.zh.md'), 'upstream Chinese graph\n')
+    writeFileSync(join(root, 'docs/module-graph.i18n.yaml'), 'upstream pairing record\n')
+
+    expect([...computeModuleGraphOutputs(root).keys()]).toEqual(['docs/module-graph.md'])
+    expect(writeModuleGraph(root)).toEqual(['docs/module-graph.md'])
+    expect(readFileSync(join(root, 'docs/module-graph.md'), 'utf8')).toContain('pkg_consumer --> pkg_provider')
+    expect(readFileSync(join(root, 'docs/module-graph.zh.md'), 'utf8')).toBe('upstream Chinese graph\n')
+    expect(readFileSync(join(root, 'docs/module-graph.i18n.yaml'), 'utf8')).toBe('upstream pairing record\n')
+    expect(writeModuleGraph(root)).toEqual([])
+  })
+
   it('renders the same peer edge in both generated languages', () => {
     const packages = [
       { short: 'provider', name: '@deepseek-ai/dsh-provider', group: 'core', rel: 'packages/core/provider', deps: [] },

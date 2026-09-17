@@ -53,8 +53,15 @@ describe('experimental workspace constraints', () => {
     ])
   })
 
-  it('keeps the current experimental publication set unrestricted', () => {
-    expect(PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES).toEqual([])
+  it('keeps only the local creator bridge private', () => {
+    const dir = 'packages/experimental/mcp-creator'
+    const name = '@deepseek-ai/dsh-experimental-mcp-creator'
+    expect(PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES).toEqual([dir])
+    expect(checkExperimentalManifest({ dir, manifest: { name, private: true } })).toEqual([])
+    expect(checkExperimentalManifest({ dir, manifest: { name, publishConfig: { access: 'public' } } })).toEqual([
+      `${name}: experimental package must set "private": true`,
+      `${name}: experimental package must omit publishConfig`,
+    ])
   })
 
   it('limits the public default to experimental package directories', () => {

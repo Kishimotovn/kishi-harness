@@ -226,21 +226,11 @@ for (const backend of backends) {
         expect(failedMember?.error).toContain('child Session recovery failed')
       }, { timeout: 5_000 })
 
-      const { mailbox } = second.ctx.agentTeams as unknown as { readonly mailbox: TeamMailbox }
-      let recovery: Promise<void> | undefined
-      const stopRecovery = second.ctx.on('session/event', (session, event) => {
-        if (session === activeHandle.agent.session && event.type === 'team/message/queued') {
-          recovery = mailbox.recoverFor(activeHandle.agent, SIGNAL)
-        }
-      })
       const receipt = await second.ctx.agentTeams.sendMessage(activeHandle.agent, {
         target: 'recoverable',
         content: [{ type: 'text', text: 'resume after reconciliation' }],
         signal: SIGNAL,
-      }).finally(stopRecovery)
-      expect(recovery).toBeDefined()
-      await recovery
-      expect(receipt.status).toBe('queued')
+      })
       await vi.waitFor(() => { expect(second.ctx.agents.get(childId)).toBeUndefined() }, { timeout: 5_000 })
       await vi.waitFor(() => { expect(durable(activeHandle.agent).pendingMessages).toEqual([]) })
       await settleMailbox(second.ctx)

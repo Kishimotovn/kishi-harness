@@ -230,6 +230,7 @@ flowchart TD
     pkg_experimental_computer_use_cua_driver_mcp["experimental-computer-use-cua-driver-mcp"]
     pkg_experimental_computer_use_cua_driver_native["experimental-computer-use-cua-driver-native"]
     pkg_experimental_inspector["experimental-inspector"]
+    pkg_experimental_mcp_creator["experimental-mcp-creator"]
     pkg_experimental_ptc_runtime_python["experimental-ptc-runtime-python"]
     pkg_experimental_tool_agent_team["experimental-tool-agent-team"]
     pkg_experimental_webworker_packer["experimental-webworker-packer"]
@@ -973,6 +974,18 @@ flowchart TD
   pkg_experimental_auto_review --> pkg_permission_presets
   pkg_experimental_auto_review --> pkg_session
   pkg_experimental_auto_review --> pkg_tools
+  pkg_experimental_mcp_creator --> pkg_agent
+  pkg_experimental_mcp_creator --> pkg_agent_loop
+  pkg_experimental_mcp_creator --> pkg_agent_presets
+  pkg_experimental_mcp_creator --> pkg_client_connection
+  pkg_experimental_mcp_creator --> pkg_cmdline
+  pkg_experimental_mcp_creator --> pkg_commands
+  pkg_experimental_mcp_creator --> pkg_host_webserver
+  pkg_experimental_mcp_creator --> pkg_llm
+  pkg_experimental_mcp_creator --> pkg_session
+  pkg_experimental_mcp_creator --> pkg_session_title
+  pkg_experimental_mcp_creator --> pkg_tools
+  pkg_experimental_mcp_creator --> pkg_workspace
   pkg_tool_cordis --> pkg_agent
   pkg_tool_cordis --> pkg_cordis_host_runner
   pkg_tool_cordis --> pkg_llm
@@ -1518,6 +1531,7 @@ flowchart TD
 | [`api-settings-controller`](../packages/api/settings-controller) | `api` | [`agent-presets`](../packages/preset/agent-presets), [`credentials`](../packages/credentials/credentials), [`native-command`](../packages/util/native-command), [`session`](../packages/core/session), [`settings`](../packages/settings/settings), [`typert-protocol`](../packages/typert/protocol) |
 | [`web-app`](../packages/bundle/web-app) | `bundle` | [`shell-env`](../packages/shell/shell-env), [`system-prompt`](../packages/core/system-prompt) |
 | [`experimental-auto-review`](../packages/experimental/auto-review) | `experimental` | [`agent`](../packages/core/agent), [`agent-instructions`](../packages/context/agent-instructions), [`llm`](../packages/llm/llm), [`permission-presets`](../packages/interaction/permission-presets), [`session`](../packages/core/session), [`tools`](../packages/core/tools) |
+| [`experimental-mcp-creator`](../packages/experimental/mcp-creator) | `experimental` | [`agent`](../packages/core/agent), [`agent-loop`](../packages/core/agent-loop), [`agent-presets`](../packages/preset/agent-presets), [`client-connection`](../packages/client/connection), [`cmdline`](../packages/boot/cmdline), [`commands`](../packages/interaction/commands), [`host-webserver`](../packages/host/webserver), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-title`](../packages/session/session-title), [`tools`](../packages/core/tools), [`workspace`](../packages/workspace/workspace) |
 | [`tool-cordis`](../packages/extensions/tool-cordis) | `extensions` | [`agent`](../packages/core/agent), [`cordis-host-runner`](../packages/extensions/cordis-host-runner), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`host-plugin-inventory`](../packages/host/plugin-inventory) | `host` | [`agent-presets`](../packages/preset/agent-presets), [`brand`](../packages/util/brand), [`typert-protocol`](../packages/typert/protocol) |
 | [`mcp-client`](../packages/mcp/mcp-client) | `mcp` | [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`mcp-resources`](../packages/mcp/mcp-resources), [`scope`](../packages/core/scope), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |

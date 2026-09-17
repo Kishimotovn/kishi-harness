@@ -655,8 +655,10 @@ describe('Node 24 lane ownership', () => {
         'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
         'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
         'packages/experimental/agent-team/tests/built-lib.e2e.ts',
+        'packages/experimental/mcp-creator/tests/profile.e2e.ts',
       ]),
     )
+    expect(subject.find(item => item.id === 'built-bin-smoke')?.env).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
     expect(subject.find(item => item.id === 'web-snapshot')).toMatchObject({
       displayCommand: 'DSH_SNAPSHOT=replay pnpm run test:web:built',
       env: { DSH_SNAPSHOT: 'replay' },
